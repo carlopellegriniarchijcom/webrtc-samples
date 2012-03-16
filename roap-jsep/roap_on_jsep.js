@@ -12,7 +12,7 @@ RoapConnection.sessionId = 103;
 
 function RoapConnection(configuration, signalingCallback) {
   var that = this;
-  this.peerconnection = new MockJsepPeerConnection(
+  this.peerConnection = new MockJsepPeerConnection(
       "nothing",
       function(candidate, more) {
         that.moreIceComing = more;
@@ -20,23 +20,25 @@ function RoapConnection(configuration, signalingCallback) {
       });
   this.sessionId = ++RoapConnection.sessionId;
   this.sequenceNumber = 0;  // Number of last ROAP message sent. Starts at 1.
-  this.state = 'new';
   this.actionNeeded = false;
   this.moreIceComing = true;
-  this.peerconnection.startIce();
-  this.onaddstream = null;
-  this.onremovestream = null;
+  this.peerConnection.startIce();
   this.onsignalingmessage = signalingCallback;
-  this.peerconnection.onaddstream = function(stream) {
+  this.peerConnection.onaddstream = function(stream) {
     if (that.onaddstream) {
       that.onaddstream(stream);
     }
   }
-  this.peerconnection.onremovestream = function(stream) {
+  this.peerConnection.onremovestream = function(stream) {
     if (that.onremovestream) {
       that.onremovestream(stream);
     }
   }
+  // Variables that are part of the public interface of PeerConnection
+  // in the 28 January 2012 version of the webrtc specification.
+  this.onaddstream = null;
+  this.onremovestream = null;
+  this.state = 'new';
 }
 
 RoapConnection.prototype.connect = function() {
@@ -53,46 +55,46 @@ RoapConnection.prototype.processSignalingMessage = function(msgstring) {
   if (this.state === 'new') {
     if (msg.messageType === 'OFFER') {
       // Initial offer.
-      this.peerconnection.setRemoteDescription('offer', msg.sdp);
+      this.peerConnection.setRemoteDescription('offer', msg.sdp);
       this.state = 'offer-received';
       // Allow other stuff to happen, then reply.
       this.markActionNeeded();
     } else {
-      this.error("Illegal message for this state: "
-                 + msg.messageType + " in state " + this.state);
+      this.error("Illegal message for this state: " +
+                 msg.messageType + " in state " + this.state);
     }
   } else if (this.state === 'offer-sent') {
     if (msg.messageType === 'ANSWER') {
-      this.peerconnection.setRemoteDescription('answer', msg.sdp);
+      this.peerConnection.setRemoteDescription('answer', msg.sdp);
       this.sendOK();
       this.state = 'established';
     } else if (msg.messageType === 'pr-answer') {
-      this.peerconnection.setRemoteDescription('pr-answer', msg.sdp);
+      this.peerConnection.setRemoteDescription('pr-answer', msg.sdp);
       // No change to state, and no response.
     } else if (msg.messageType === 'offer') {
       // Glare processing.
       this.error("Not written yet");
     } else {
-      this.error("Illegal message for this state: "
-                 + msg.messageType + " in state " + this.state);
+      this.error("Illegal message for this state: " +
+                 msg.messageType + " in state " + this.state);
     }
   } else if (this.state === 'established') {
     if (msg.messageType === 'OFFER') {
       // Subsequent offer.
-      this.peerconnection.setRemoteDescription('offer', msg.sdp);
+      this.peerConnection.setRemoteDescription('offer', msg.sdp);
       this.state = 'offer-received';
       // Allow other stuff to happen, then reply.
       this.markActionNeeded();
     } else {
-      this.error("Illegal message for this state: "
-                 + msg.messageType + " in state " + this.state);
+      this.error("Illegal message for this state: " +
+                 msg.messageType + " in state " + this.state);
     }
   }
 }
 
 // Adding streams - this causes signalling to happen, if needed.
 RoapConnection.prototype.addStream = function(stream) {
-  this.peerconnection.addStream(stream);
+  this.peerConnection.addStream(stream);
   this.markActionNeeded();
 }
 
@@ -133,18 +135,18 @@ RoapConnection.prototype.onstablestate = function() {
   if (this.actionNeeded) {
     if (this.state === 'new' || this.state === 'established') {
       // Need to send an offer.
-      mySDP = this.peerconnection.createOffer();
-      if (mySDP === this.peerconnection.localDescription) {
+      mySDP = this.peerConnection.createOffer();
+      if (mySDP === this.peerConnection.localDescription) {
         // No change needed. Ignore.
         return;
       }
-      this.peerconnection.setLocalDescription('offer', mySDP);
+      this.peerConnection.setLocalDescription('offer', mySDP);
       this.sendMessage("OFFER", mySDP.toSdp());
       // Not done: Retransmission on non-response.
       this.state = 'offer-sent';
     } else if (this.state === 'offer-received') {
-      mySDP = this.peerconnection.createAnswer();
-      this.peerconnection.setLocalDescription('answer', mySDP);
+      mySDP = this.peerConnection.createAnswer();
+      this.peerConnection.setLocalDescription('answer', mySDP);
       // Fill in IDs and all that.
       this.sendMessage("ANSWER", mySDP.toSdp());
       this.state = 'established';

@@ -29,7 +29,6 @@ MockJsepPeerConnection.prototype.setLocalDescription = function(action, desc) {
 }
 
 MockJsepPeerConnection.prototype.setRemoteDescription = function(action, desc) {
-  var that = this;
   this.trace("setRemoteDescription");
   this.remoteDescription = desc;
   if (desc.match(/ from (\d+)/)) {
