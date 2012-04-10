@@ -10,19 +10,37 @@
 // Static variable for allocating new session IDs.
 RoapConnection.sessionId = 103;
 
+// Call the constructor for peerconnections indirectly, so that it's availble
+// for dependency injection.
+RoapConnection.JsepPeerConnectionConstructor = webkitPeerConnection00;
+RoapConnection.SessionDescriptionConstructor = SessionDescription;
+
 function RoapConnection(configuration, signalingCallback) {
   var that = this;
-  this.peerConnection = new MockJsepPeerConnection(
-      "nothing",
+  this.peerConnection = new RoapConnection.JsepPeerConnectionConstructor(
+      "STUN stun.l.google.com:19302",
       function(candidate, more) {
-        that.moreIceComing = more;
-        that.markActionNeeded();
+        if (more == false) {
+          // At the moment, we do not renegotiate when new candidates
+          // show up after the more flag has been false once.
+          that.moreIceComing = false;
+          that.markActionNeeded();
+        }
+        that.iceCandidateCount += 1;
+        // DEBUG
+        var now = new Date();
+        console.log(now.getTime() + ": Connection " + that.sessionId + " got ICE candidate " +
+                    that.iceCandidateCount +
+                    ", more is " + more);
+        console.log(candidate?candidate.toSdp():"null");
+
       });
   this.sessionId = ++RoapConnection.sessionId;
   this.sequenceNumber = 0;  // Number of last ROAP message sent. Starts at 1.
   this.actionNeeded = false;
+  this.iceStarted = false;
   this.moreIceComing = true;
-  this.peerConnection.startIce();
+  this.iceCandidateCount = 0;
   this.onsignalingmessage = signalingCallback;
   this.peerConnection.onaddstream = function(stream) {
     if (that.onaddstream) {
@@ -50,12 +68,17 @@ RoapConnection.prototype.processSignalingMessage = function(msgstring) {
   // Offer: Check for glare and resolve.
   // Answer/OK: Remove retransmit for the msg this is an answer to.
   // Send back "OK" if this was an Answer.
+  console.log("Activity on conn " + this.sessionId);
   var msg = JSON.parse(msgstring);
   this.incomingMessage = msg;
   if (this.state === 'new') {
     if (msg.messageType === 'OFFER') {
       // Initial offer.
-      this.peerConnection.setRemoteDescription('offer', msg.sdp);
+      this.offer_as_string = msg.sdp;
+      var sdp = new RoapConnection.SessionDescriptionConstructor(msg.sdp);
+      console.log("SDP is " + sdp.toSdp());
+      this.peerConnection.setRemoteDescription(this.peerConnection.SDP_OFFER,
+                                               sdp);
       this.state = 'offer-received';
       // Allow other stuff to happen, then reply.
       this.markActionNeeded();
@@ -65,11 +88,13 @@ RoapConnection.prototype.processSignalingMessage = function(msgstring) {
     }
   } else if (this.state === 'offer-sent') {
     if (msg.messageType === 'ANSWER') {
-      this.peerConnection.setRemoteDescription('answer', msg.sdp);
+      this.peerConnection.setRemoteDescription(this.peerConnection.SDP_ANSWER,
+          new RoapConnection.SessionDescriptionConstructor(msg.sdp));
       this.sendOK();
       this.state = 'established';
     } else if (msg.messageType === 'pr-answer') {
-      this.peerConnection.setRemoteDescription('pr-answer', msg.sdp);
+      this.peerConnection.setRemoteDescription('pr-answer',
+          new RoapConnection.SessionDescriptionConstructor(msg.sdp));
       // No change to state, and no response.
     } else if (msg.messageType === 'offer') {
       // Glare processing.
@@ -81,7 +106,8 @@ RoapConnection.prototype.processSignalingMessage = function(msgstring) {
   } else if (this.state === 'established') {
     if (msg.messageType === 'OFFER') {
       // Subsequent offer.
-      this.peerConnection.setRemoteDescription('offer', msg.sdp);
+      this.peerConnection.setRemoteDescription(this.peerConnection.SDP_OFFER,
+          new RoapConnection.SessionDescriptionConstructor(msg.sdp));
       this.state = 'offer-received';
       // Allow other stuff to happen, then reply.
       this.markActionNeeded();
@@ -99,12 +125,18 @@ RoapConnection.prototype.addStream = function(stream) {
 }
 
 RoapConnection.prototype.removeStream = function(stream) {
-  for (i = 0; i < this.localStreams.length; ++i) {
+  var i;
+  for (i = 0; i < this.peerConnection.localStreams.length; ++i) {
     if (localStreams[i] === stream) {
       localStreams[i] = null;
     }
   }
   this.markActionNeeded();
+}
+
+RoapConnection.prototype.close = function() {
+  this.state = 'closed';
+  this.peerConnection.close();
 }
 
 // Internal function: Mark that something happened.
@@ -128,26 +160,53 @@ RoapConnection.prototype.markActionNeeded = function() {
 RoapConnection.prototype.onstablestate = function() {
   var mySDP;
   var roapMessage = {};
-  // Don't do anything until we have the ICE candidates.
-  if (this.moreIceComing) {
-    return;
-  }
   if (this.actionNeeded) {
     if (this.state === 'new' || this.state === 'established') {
-      // Need to send an offer.
-      mySDP = this.peerConnection.createOffer();
-      if (mySDP === this.peerConnection.localDescription) {
-        // No change needed. Ignore.
+      // See if the current offer is the same as what we already sent.
+      // If not, no change is needed.
+      var newOffer = this.peerConnection.createOffer("audio,video");
+      if (newOffer.toSdp() != this.prevOffer) {
+        // Prepare to send an offer.
+        this.peerConnection.setLocalDescription(this.peerConnection.SDP_OFFER,
+                                                newOffer);
+        this.peerConnection.startIce();
+        this.state = 'preparing-offer';
+        this.markActionNeeded();
+        return;
+      } else {
+        console.log("Not sending a new offer");
+      }
+    } else if (this.state === 'preparing-offer') {
+      // Don't do anything until we have the ICE candidates.
+      if (this.moreIceComing) {
         return;
       }
-      this.peerConnection.setLocalDescription('offer', mySDP);
-      this.sendMessage("OFFER", mySDP.toSdp());
+      // Now able to send the offer we've already prepared.
+      this.prevOffer = this.peerConnection.localDescription.toSdp();
+      console.log("Sent SDP is" + this.prevOffer);
+      this.sendMessage("OFFER", this.prevOffer);
       // Not done: Retransmission on non-response.
       this.state = 'offer-sent';
     } else if (this.state === 'offer-received') {
-      mySDP = this.peerConnection.createAnswer();
-      this.peerConnection.setLocalDescription('answer', mySDP);
-      // Fill in IDs and all that.
+      mySDP = this.peerConnection.createAnswer(this.offer_as_string,
+                                               "audio,video");
+      this.peerConnection.setLocalDescription(this.peerConnection.SDP_ANSWER,
+                                              mySDP);
+      this.state = 'offer-received-preparing-answer';
+      if (!this.iceStarted) {
+        var now = new Date();
+        console.log(now.getTime() + ": Starting ICE in responder");
+        this.peerConnection.startIce();
+        this.iceStarted = true;
+      } else {
+        this.markActionNeeded();
+        return;
+      }
+    } else if (this.state === 'offer-received-preparing-answer') {
+      if (this.moreIceComing) {
+        return;
+      }
+      mySDP = this.peerConnection.localDescription;
       this.sendMessage("ANSWER", mySDP.toSdp());
       this.state = 'established';
     } else {

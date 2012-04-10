@@ -15,12 +15,12 @@ function MockJsepPeerConnection(configuration, iceCb) {
 
 MockJsepPeerConnection.prototype.createOffer = function(hints) {
   this.trace("CreateOffer");
-  return new SessionDescription("offer from " + this.id);
+  return new MockSessionDescription("offer from " + this.id);
 }
 
   MockJsepPeerConnection.prototype.createAnswer = function(offer, hints) {
   this.trace("createAnswer");
-  return new SessionDescription("answer from " + this.id);
+  return new MockSessionDescription("answer from " + this.id);
 }
 
 MockJsepPeerConnection.prototype.setLocalDescription = function(action, desc) {
@@ -31,7 +31,7 @@ MockJsepPeerConnection.prototype.setLocalDescription = function(action, desc) {
 MockJsepPeerConnection.prototype.setRemoteDescription = function(action, desc) {
   this.trace("setRemoteDescription");
   this.remoteDescription = desc;
-  if (desc.match(/ from (\d+)/)) {
+  if (desc.toSdp().match(/ from (\d+)/)) {
     this.trace(this.id + " has " + RegExp.$1 + " as remote");
     this.remote = MockJsepPeerConnection.existingConnections[RegExp.$1];
     // Signal new streams (after this finishes).
@@ -60,7 +60,9 @@ MockJsepPeerConnection.prototype.streamAdded = function(stream) {
   var that = this;
   window.setTimeout(function() {
       that.trace("Signalling remote stream added");
-      that.onaddstream(stream);
+      var e = {};
+      e.stream = stream;
+      that.onaddstream(e);
     },
     1);
 }
@@ -86,7 +88,7 @@ MockJsepPeerConnection.prototype.startIce = function(options) {
   window.setTimeout(function() {
       that.trace("Providing candidate");
       that.iceState = "completed";
-      that.iceCallback(new IceCandidate(), false);
+      that.iceCallback(new MockIceCandidate(), false);
     },
     2);
 }
@@ -94,6 +96,13 @@ MockJsepPeerConnection.prototype.startIce = function(options) {
 MockJsepPeerConnection.prototype.processIceMessage = function(candidate) {
   this.trace("processIceMessage");
   // Nothing happens.
+}
+
+MockJsepPeerConnection.prototype.close = function() {
+  var i;
+  for (i = 0; i < this.localStreams.length; ++i) {
+    this.localStreams[i].stop();
+  }
 }
 
 // Internal function: Trace what happens. This version: Console write.
@@ -106,25 +115,25 @@ MockJsepPeerConnection.prototype.error = function(text) {
   throw("MockJsep error: " + text);
 }
 
-// SessionDescription implementation
-function SessionDescription(type) {
+// Mock SessionDescription implementation
+function MockSessionDescription(type) {
   this.sdp = "Fake session description of " + type;
 }
 
-SessionDescription.prototype.toSdp = function() {
+MockSessionDescription.prototype.toSdp = function() {
   return this.sdp;
 }
 
-SessionDescription.prototype.addCandidate = function(candidate) {
+MockSessionDescription.prototype.addCandidate = function(candidate) {
   this.sdp += candidate.toSdp();
 }
 
-// IceCandidate implementation
-function IceCandidate() {
+// Mock IceCandidate implementation
+function MockIceCandidate() {
   this.sdp = "a=candidate:Fake candidate";
   this.label = "first";
 }
 
-IceCandidate.prototype.toSdp = function() {
+MockIceCandidate.prototype.toSdp = function() {
   return this.sdp;
 }
