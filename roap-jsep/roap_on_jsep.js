@@ -27,13 +27,6 @@ function RoapConnection(configuration, signalingCallback) {
           that.markActionNeeded();
         }
         that.iceCandidateCount += 1;
-        // DEBUG
-        var now = new Date();
-        console.log(now.getTime() + ": Connection " + that.sessionId + " got ICE candidate " +
-                    that.iceCandidateCount +
-                    ", more is " + more);
-        console.log(candidate?candidate.toSdp():"null");
-
       });
   this.sessionId = ++RoapConnection.sessionId;
   this.sequenceNumber = 0;  // Number of last ROAP message sent. Starts at 1.
@@ -57,9 +50,7 @@ function RoapConnection(configuration, signalingCallback) {
   this.onaddstream = null;
   this.onremovestream = null;
   this.state = 'new';
-}
-
-RoapConnection.prototype.connect = function() {
+  // Auto-fire next events.
   this.markActionNeeded();
 }
 

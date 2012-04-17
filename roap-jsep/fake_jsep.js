@@ -15,12 +15,16 @@ function MockJsepPeerConnection(configuration, iceCb) {
 
 MockJsepPeerConnection.prototype.createOffer = function(hints) {
   this.trace("CreateOffer");
-  return new MockSessionDescription("offer from " + this.id);
+  return new MockSessionDescription("offer from " + this.id +
+                                    " with " + this.localStreams.length +
+                                    " streams");
 }
 
   MockJsepPeerConnection.prototype.createAnswer = function(offer, hints) {
   this.trace("createAnswer");
-  return new MockSessionDescription("answer from " + this.id);
+  return new MockSessionDescription("answer from " + this.id +
+                                    " with " + this.localStreams.length +
+                                    " streams");
 }
 
 MockJsepPeerConnection.prototype.setLocalDescription = function(action, desc) {
