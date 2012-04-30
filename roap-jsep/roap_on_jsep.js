@@ -46,6 +46,11 @@ function RoapConnection(configuration, signalingCallback) {
   this.moreIceComing = true;
   this.iceCandidateCount = 0;
   this.onsignalingmessage = signalingCallback;
+  this.peerConnection.onopen = function() {
+    if (that.onopen) {
+      that.onopen();
+    }
+  }
   this.peerConnection.onaddstream = function(stream) {
     if (that.onaddstream) {
       that.onaddstream(stream);

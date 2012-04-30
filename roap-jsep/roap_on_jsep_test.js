@@ -23,7 +23,9 @@ var eventsToFire = [];
 var fireAllEvents = function() {
   while (eventsToFire.length > 0) {
     var event = eventsToFire.shift();
-    event();
+    if (event) {
+      event();
+    }
   }
 };
 
@@ -32,7 +34,7 @@ if (!console) {
   var console = {
     'log' : function(message) {
       // Uncomment this line for debugging the tests.
-      //log(message);
+      log(message);
     }
   };
 }
@@ -41,17 +43,22 @@ if (!console) {
  * @constructor for the RoapOnJsepTest class.
  */
 function RoapOnJsepTest() {
-  // We tell the implementation under test to use our mock functions.
-  RoapConnection.JsepPeerConnectionConstructor = MockJsepPeerConnection;
-  RoapConnection.SessionDescriptionConstructor = MockSessionDescription;
-  // Override the timeout function used to simulate events in the
-  // libraries.
-  MockJsepPeerConnection.prototype.doLater = function(what) {
-    eventsToFire.push(what);
-  };
+  if (typeof(testsShouldUseRealJsep) === 'undefined') {
+    // We tell the implementation under test to use our mock functions.
+    RoapConnection.JsepPeerConnectionConstructor = MockJsepPeerConnection;
+    RoapConnection.SessionDescriptionConstructor = MockSessionDescription;
+    // Override the timeout function used to simulate events in the
+    // libraries.
+    MockJsepPeerConnection.prototype.doLater = function(what) {
+      eventsToFire.push(what);
+    };
+  }
   RoapConnection.prototype.doLater = function(what) {
     eventsToFire.push(what);
   };
+  // Empty the global events array at test start (remove hangover
+  // from previous tests).
+  eventsToFire = [];
   var that = this;
   this.pc1 = null;
   this.pc2 = null;
@@ -60,6 +67,7 @@ function RoapOnJsepTest() {
     // Since pc2 auto-fires when created, we can't create it until
     // we have a message for it.
     if (that.pc2 === null) {
+      log('DEBUG: creating pc2');
       that.pc2 = new RoapConnection('dummy arg', that.pc2Callback);
       // Add the staged "onaddstream" callback, if any.
       that.pc2.onaddstream = that.onaddstreamCallbackForPc2;
@@ -72,8 +80,10 @@ function RoapOnJsepTest() {
 
   this.onaddstreamCallbackForPc2 = null;
   // Create two PeerConnection objects that embrace each other.
-  this.setupPeerConnections = function() {
+  this.setupPeerConnections = function(onOpenCallback) {
+    log('DEBUG: creating pc1');
     that.pc1 = new RoapConnection('dummy arg', that.pc1Callback);
+    that.pc1.onopen = onOpenCallback;
   };
 }
 
@@ -99,10 +109,15 @@ RoapOnJsepTest.prototype.SetupDoesNotCrashTest = function() {
  * Connects two RoapConnections together.
  */
 RoapOnJsepTest.prototype.ConnectTest = function() {
-  this.setupPeerConnections();
+  var that = this;
+  var checkEstablished = function() {
+    expectThat(that.pc1.state, equals('established'));
+    expectThat(that.pc2.state, equals('established'));
+  };
+  var onopen = createMockFunction();
+  expectCall(onopen)().willOnce(checkEstablished);
+  this.setupPeerConnections(onopen);
   fireAllEvents();
-  expectThat(this.pc1.state, equals('established'));
-  expectThat(this.pc2.state, equals('established'));
 };
 
 /**

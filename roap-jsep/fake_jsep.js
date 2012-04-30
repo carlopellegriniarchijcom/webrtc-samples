@@ -19,6 +19,7 @@ MockJsepPeerConnection.existingConnections = [];
 function MockJsepPeerConnection(configuration, iceCb) {
   this.id = ++MockJsepPeerConnection.connectionCount;
   MockJsepPeerConnection.existingConnections[this.id] = this;
+  this.trace('Constructed MockJsepPeerConnection ' + this.id);
   this.iceCallback = iceCb;
   this.localStreams = [];
   this.remoteStreams = [];
@@ -69,8 +70,11 @@ MockJsepPeerConnection.prototype.setRemoteDescription = function(action, desc) {
   this.trace('setRemoteDescription');
   this.remoteDescription = desc;
   if (desc.toSdp().match(/ from (\d+)/)) {
-    this.trace(this.id + ' has ' + RegExp.$1 + ' as remote');
-    this.remote = MockJsepPeerConnection.existingConnections[RegExp.$1];
+    if (!this.remote) {
+      this.trace(this.id + ' has ' + RegExp.$1 + ' as remote');
+      this.remote = MockJsepPeerConnection.existingConnections[RegExp.$1];
+      this.doLater(this.onopen);
+    }
     // Signal new streams (after this finishes).
     this.trace('Remote has ' + this.remote.localStreams.length + ' streams');
     for (var i = 0; i < this.remote.localStreams.length; i++) {
@@ -185,7 +189,9 @@ MockJsepPeerConnection.prototype.error = function(text) {
  * @param {function} what Callback to be called later.
  */
 MockJsepPeerConnection.prototype.doLater = function(what) {
-  window.setTimeout(what, 1);
+  if (what) {
+    window.setTimeout(what, 1);
+  }
 };
 
 /**
