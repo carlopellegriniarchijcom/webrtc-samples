@@ -34,7 +34,7 @@ if (!console) {
   var console = {
     'log' : function(message) {
       // Uncomment this line for debugging the tests.
-      log(message);
+      //log(message);
     }
   };
 }
@@ -67,7 +67,6 @@ function RoapOnJsepTest() {
     // Since pc2 auto-fires when created, we can't create it until
     // we have a message for it.
     if (that.pc2 === null) {
-      log('DEBUG: creating pc2');
       that.pc2 = new RoapConnection('dummy arg', that.pc2Callback);
       // Add the staged "onaddstream" callback, if any.
       that.pc2.onaddstream = that.onaddstreamCallbackForPc2;
@@ -81,7 +80,6 @@ function RoapOnJsepTest() {
   this.onaddstreamCallbackForPc2 = null;
   // Create two PeerConnection objects that embrace each other.
   this.setupPeerConnections = function(onOpenCallback) {
-    log('DEBUG: creating pc1');
     that.pc1 = new RoapConnection('dummy arg', that.pc1Callback);
     that.pc1.onopen = onOpenCallback;
   };
@@ -107,6 +105,7 @@ RoapOnJsepTest.prototype.SetupDoesNotCrashTest = function() {
 
 /**
  * Connects two RoapConnections together.
+ * Verifies that the onopen callback is called.
  */
 RoapOnJsepTest.prototype.ConnectTest = function() {
   var that = this;

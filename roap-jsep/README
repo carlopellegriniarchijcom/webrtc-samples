@@ -15,3 +15,7 @@ The libv8 instructions are deficient; do this:
 
 Then you can compile and install gjstest.
 
+To run the tests, run the "run_tests" shell script.
+This will also generate the roap_on_jsep_test.html file, which you can load
+in your browser to verify that the tests work there too.
+
