@@ -116,12 +116,18 @@
 
   getUserMedia = function() {
     try {
-      navigator.webkitGetUserMedia("video,audio", onUserMediaSuccess,
+      navigator.webkitGetUserMedia({audio:true, video:true}, onUserMediaSuccess,
                                    onUserMediaError);
-      console.log("Requested access to local media.");
+      console.log("Requested access to local media with new syntax.");
     } catch (e) {
-      alert("webkitGetUserMedia() failed. Does your browser support WebRTC?");
-      console.log("webkitGetUserMedia failed with exception: " + e.message);
+      try {
+        navigator.webkitGetUserMedia("video,audio", onUserMediaSuccess,
+                                     onUserMediaError);
+        console.log("Requested access to local media with old syntax.");
+      } catch (e) {
+        alert("webkitGetUserMedia() failed. Is the MediaStream flag enabled in about:flags?");
+        console.log("webkitGetUserMedia failed with exception: " + e.message);
+      }
     }
   }
 
@@ -138,7 +144,7 @@
         console.log("Created webkitPeerConnnection with config \"{{pc_config}}\".");
       } catch (e) {
         console.log("Failed to create webkitPeerConnection, exception: " + e.message);
-        alert("Cannot create PeerConnection object; tried webkitPeerConnection and webkitDeprecatedPeerConnection");
+        alert("Cannot create PeerConnection object; Is the 'PeerConnection' flag enabled in about:flags?");
         return;
       }
     }
