@@ -196,7 +196,13 @@ RoapConnection.prototype.onstablestate = function() {
     if (this.state === 'new' || this.state === 'established') {
       // See if the current offer is the same as what we already sent.
       // If not, no change is needed.
-      var newOffer = this.peerConnection.createOffer('audio,video');
+      var newOffer;
+      try {
+        newOffer = this.peerConnection.createOffer('audio,video');
+      } catch (e) {
+        newOffer = this.peerConnection.createOffer({audio:true, video:true});
+      }
+
       if (newOffer.toSdp() != this.prevOffer) {
         // Prepare to send an offer.
         this.peerConnection.setLocalDescription(this.peerConnection.SDP_OFFER,
@@ -220,8 +226,13 @@ RoapConnection.prototype.onstablestate = function() {
       // Not done: Retransmission on non-response.
       this.state = 'offer-sent';
     } else if (this.state === 'offer-received') {
-      mySDP = this.peerConnection.createAnswer(this.offer_as_string,
-                                               'audio,video');
+      try {
+        mySDP = this.peerConnection.createAnswer(this.offer_as_string,
+                                                 'audio,video');
+      } catch (e) {
+        mySDP = this.peerConnection.createAnswer(this.offer_as_string,
+                                                 {audio:true, video:true});
+      }
       this.peerConnection.setLocalDescription(this.peerConnection.SDP_ANSWER,
                                               mySDP);
       this.state = 'offer-received-preparing-answer';

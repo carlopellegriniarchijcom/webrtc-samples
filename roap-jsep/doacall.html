@@ -35,10 +35,16 @@ getFailure = function(stream) {
 
 getUserMedia = function() {
   try {
+    // Old style
     navigator.webkitGetUserMedia("video,audio", getSuccess, getFailure);
     console.log("Requested access to local media.");
   } catch (e) {
-    console.log("getUserMedia error.");
+    try {
+      navigator.webkitGetUserMedia({video:true, audio:true},
+                                   getSuccess, getFailure);
+    } catch (e) {
+      console.log("getUserMedia error: " + e);
+    }
   }
 }
 
