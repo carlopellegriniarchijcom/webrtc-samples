@@ -11,9 +11,11 @@ handlers:
 
 - url: /html
   static_dir: html
+  secure: always
 
 - url: .*
   script: main.app
+  secure: always
 
 libraries:
 - name: webapp2
