@@ -113,7 +113,7 @@ class DisconnectPage(webapp.RequestHandler):
       room.remove_user(user)
       logging.info('Room ' + room_key + ' has state ' + str(room))
       if other_user:
-        channel.send_message(make_token(room, other_user), 'BYE')
+        channel.send_message(make_token(room, other_user), '{"type":"bye"}')
         logging.info('Sent BYE to ' + other_user)
     else:
       logging.warning('Unknown room ' + room_key)
@@ -130,8 +130,7 @@ class MessagePage(webapp.RequestHandler):
       if other_user:
         # special case the loopback scenario
         if other_user == user:
-          message = message.replace("\"OFFER\"",
-                                    "\"ANSWER\",\n   \"answererSessionId\" : \"1\"")
+          message = message.replace("\"offer\"", "\"answer\"")
           message = message.replace("a=crypto:0 AES_CM_128_HMAC_SHA1_32",
                                     "a=xrypto:0 AES_CM_128_HMAC_SHA1_32")
         channel.send_message(make_token(room, other_user), message)

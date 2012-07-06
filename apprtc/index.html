@@ -168,21 +168,14 @@
 
   function createPeerConnection() {
     try {
-      pc = new webkitDeprecatedPeerConnection("{{ pc_config }}",
-                                              onSignalingMessage);
-      console.log("Created webkitDeprecatedPeerConnnection with config \"{{ pc_config }}\".");
+      pc = new webkitPeerConnection00("{{ pc_config }}", onIceCandidate);
+      console.log("Created webkitPeerConnnection00 with config \"{{ pc_config }}\".");
     } catch (e) {
-      console.log("Failed to create webkitDeprecatedPeerConnection, exception: " + e.message);
-      try {
-        pc = new webkitPeerConnection("{{ pc_config }}",
-                                      onSignalingMessage);
-        console.log("Created webkitPeerConnnection with config \"{{pc_config}}\".");
-      } catch (e) {
-        console.log("Failed to create webkitPeerConnection, exception: " + e.message);
-        alert("Cannot create PeerConnection object; Is the 'PeerConnection' flag enabled in about:flags?");
-        return;
-      }
+      console.log("Failed to create PeerConnection, exception: " + e.message);
+      alert("Cannot create PeerConnection object; Is the 'PeerConnection' flag enabled in about:flags?");
+      return;
     }
+
     pc.onconnecting = onSessionConnecting;
     pc.onopen = onSessionOpened;
     pc.onaddstream = onRemoteStreamAdded;
@@ -197,6 +190,9 @@
       console.log("Adding local stream.");
       pc.addStream(localStream);
       started = true;
+      // Caller initiates offer to peer.
+      if (initiator)
+        doCall();
     }
   }
 
@@ -204,12 +200,50 @@
     footer.innerHTML = state;
   }
 
-  function sendMessage(path, message) {
-    console.log('C->S: ' + message);
-    path += '?r={{ room_key }}' + '&u={{ me }}';
+  function doCall() {
+    console.log("Send offer to peer");
+    var offer = pc.createOffer({audio:true, video:true});
+    pc.setLocalDescription(pc.SDP_OFFER, offer);
+    sendMessage({type: 'offer', sdp: offer.toSdp()});
+    pc.startIce();
+  }
+
+  function doAnswer() {
+    console.log("Send answer to peer");
+    var offer = pc.remoteDescription;
+    var answer = pc.createAnswer(offer.toSdp(), {audio:true,video:true});
+    pc.setLocalDescription(pc.SDP_ANSWER, answer);
+    sendMessage({type: 'answer', sdp: answer.toSdp()});
+    pc.startIce();
+  }
+
+  function sendMessage(message) {
+    var msgString = JSON.stringify(message);
+    console.log('C->S: ' + msgString);
+    path = '/message?r={{ room_key }}' + '&u={{ me }}';
     var xhr = new XMLHttpRequest();
     xhr.open('POST', path, true);
-    xhr.send(message);
+    xhr.send(msgString);
+  }
+
+  function processSignalingMessage(message) {
+    var msg = JSON.parse(message);
+
+    if (msg.type === 'offer') {
+      // Callee creates PeerConnection
+      if (!initiator && !started)
+        maybeStart();
+
+      pc.setRemoteDescription(pc.SDP_OFFER, new SessionDescription(msg.sdp));
+      doAnswer();
+    } else if (msg.type === 'answer' && started) {
+      pc.setRemoteDescription(pc.SDP_ANSWER, new SessionDescription(msg.sdp));
+    } else if (msg.type === 'candidate' && started) {
+      var candidate = new IceCandidate(msg.label, msg.candidate);
+      pc.processIceMessage(candidate);
+    } else if (msg.type === 'bye' && started) {
+      onRemoteHangup();
+    }
   }
 
   function onChannelOpened() {
@@ -219,14 +253,7 @@
   }
   function onChannelMessage(message) {
     console.log('S->C: ' + message.data);
-    if (message.data != 'BYE') {
-      if (message.data.indexOf("\"ERROR\"", 0) == -1) {
-        if (!initiator && !started) maybeStart();
-        pc.processSignalingMessage(message.data);
-      }
-    } else {
-      onRemoteHangup();
-    }
+    processSignalingMessage(message.data);
   }
   function onChannelError() {
     console.log('Channel error.');
@@ -241,6 +268,7 @@
     localVideo.style.opacity = 1;
     localVideo.src = url;
     localStream = stream;
+    // Caller creates PeerConnection.
     if (initiator) maybeStart();
   }
   function onUserMediaError(error) {
@@ -248,16 +276,24 @@
     alert("Failed to get access to local media. Error code was " + error.code + ".");
   }
 
-  function onSignalingMessage(message) {
-    sendMessage('/message', message);
+  function onIceCandidate(candidate, moreToFollow) {
+    if (candidate) {
+        sendMessage({type: 'candidate',
+                     label: candidate.label, candidate: candidate.toSdp()});
+    }
+
+    if (!moreToFollow) {
+      console.log("End of candidates.");
+    }
   }
+
   function onSessionConnecting(message) {
     console.log("Session connecting.");
   }
   function onSessionOpened(message) {
     console.log("Session opened.");
   }
- 
+
   function onRemoteStreamAdded(event) {
     console.log("Remote stream added.");
     var url = webkitURL.createObjectURL(event.stream);
@@ -271,6 +307,7 @@
 
   function onHangup() {
     console.log("Hanging up.");
+    started = false;    // Stop processing any message
     transitionToDone();
     pc.close();
     // will trigger BYE from server
@@ -278,16 +315,16 @@
     pc = null;
     //socket = null;
   }
-    
+   
   function onRemoteHangup() {
     console.log('Session terminated.');
+    started = false;    // Stop processing any message
     transitionToWaiting();
-    //miniVideo.src = "";
-    //remoteVideo.src = "";
+    pc.close();
+    pc = null;
     initiator = 0;
-    started = false;
   }
-  
+
   function waitForRemoteVideo() {
     if (remoteVideo.currentTime > 0) {
       transitionToActive();
