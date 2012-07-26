@@ -117,6 +117,9 @@
   var socket;
   var initiator = {{ initiator }};
   var started = false;
+  var iceUfrags = [];
+  var icePwds = [];
+  var needFormatCandidate = false;
 
   function initialize() {
     console.log("Initializing; room={{ room_key }}.");
@@ -235,15 +238,59 @@
         maybeStart();
 
       pc.setRemoteDescription(pc.SDP_OFFER, new SessionDescription(msg.sdp));
+      checkIceFormat(msg.sdp);
       doAnswer();
     } else if (msg.type === 'answer' && started) {
       pc.setRemoteDescription(pc.SDP_ANSWER, new SessionDescription(msg.sdp));
+      checkIceFormat(msg.sdp);
     } else if (msg.type === 'candidate' && started) {
-      var candidate = new IceCandidate(msg.label, msg.candidate);
+      var candidateString = maybeAddIceCredentials(msg);
+      var candidate = new IceCandidate(msg.label, candidateString);
       pc.processIceMessage(candidate);
     } else if (msg.type === 'bye' && started) {
       onRemoteHangup();
     }
+  }
+
+  // Temp solution for compatibility between Chrome 20 and later versions.
+  // We need to convert the ICE candidate into old format at Chrome 20 end.
+  function checkIceFormat(msgString) {
+    var ua = navigator.userAgent;
+    if (ua.substr(ua.lastIndexOf('Chrome/')+7, 2) === '20') {
+      // If the offer/answer is from later Chrome to Chrome 20
+      // Save the username and password of both audio and video
+      if (msgString.search('ice-ufrag:') !== -1 &&
+            msgString.search('ice-pwd:') !== -1) {
+        saveIceCredentials(msgString);
+        needFormatCandidate = true;
+      }
+    }
+  }
+
+  // Save the ICE credentials in SDP from later Chrome at Chrome 20 end.
+  function saveIceCredentials(msgString) {
+    var indexOfAudioSdp = msgString.search('m=audio');
+    var indexOfVideoSdp = msgString.search('m=video');
+
+    // Candidate label 0 for audio, 1 for video
+    var audioSdp = msgString.substring(indexOfAudioSdp, indexOfVideoSdp);
+    iceUfrags[0] = audioSdp.substr(audioSdp.search('ice-ufrag:')+10, 16);
+    icePwds[0] = audioSdp.substr(audioSdp.search('ice-pwd:')+8, 24);
+    var videoSdp = msgString.substring(indexOfVideoSdp);
+    iceUfrags[1] = videoSdp.substr(videoSdp.search('ice-ufrag:')+10, 16);
+    icePwds[1] = videoSdp.substr(videoSdp.search('ice-pwd:')+8, 24);
+  }
+
+  // Add saved ICE credentials into candidate from later Chrome at Chrome 20 end.
+  function maybeAddIceCredentials(msg) {
+    var candidateString = msg.candidate;
+    if (needFormatCandidate) {
+      candidateString = msg.candidate.replace('generation',
+                                              'username ' + iceUfrags[msg.label] +
+                                              ' password ' + icePwds[msg.label] +
+                                              ' generation');
+    }
+    return candidateString;
   }
 
   function onChannelOpened() {
@@ -307,22 +354,25 @@
 
   function onHangup() {
     console.log("Hanging up.");
-    started = false;    // Stop processing any message
     transitionToDone();
-    pc.close();
+    stop();
     // will trigger BYE from server
     socket.close();
-    pc = null;
-    //socket = null;
+
   }
    
   function onRemoteHangup() {
     console.log('Session terminated.');
-    started = false;    // Stop processing any message
     transitionToWaiting();
+    stop();
+    initiator = 0;
+  }
+
+  function stop() {
+    started = false;
+    needFormatCandidate = false;
     pc.close();
     pc = null;
-    initiator = 0;
   }
 
   function waitForRemoteVideo() {
