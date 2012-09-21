@@ -14,6 +14,7 @@ import logging
 import os
 import random
 import re
+import json
 from google.appengine.api import channel
 from google.appengine.ext import db
 from google.appengine.ext import webapp
@@ -106,27 +107,31 @@ class DisconnectPage(webapp.RequestHandler):
   def post(self):
     key = self.request.get('from')
     room_key, user = key.split('/');
-    logging.info('Removing user ' + user + ' from room ' + room_key)
     room = Room.get_by_key_name(room_key)
     if room and room.has_user(user):
       other_user = room.get_other_user(user)
       room.remove_user(user)
+      logging.info('User ' + user + ' removed from room ' + room_key)
       logging.info('Room ' + room_key + ' has state ' + str(room))
       if other_user:
         channel.send_message(make_token(room, other_user), '{"type":"bye"}')
         logging.info('Sent BYE to ' + other_user)
-    else:
-      logging.warning('Unknown room ' + room_key)
+    logging.warning('User ' + user + ' disconnected from room ' + room_key)
 
 
 class MessagePage(webapp.RequestHandler):
   def post(self):
     message = self.request.body
+    message_obj = json.loads(message)
     room_key = self.request.get('r')
     room = Room.get_by_key_name(room_key)
     if room:
       user = self.request.get('u')
       other_user = room.get_other_user(user)
+      if message_obj['type'] == 'bye':
+        room.remove_user(user)
+        logging.info('User ' + user + ' quit from room ' + room_key)
+        logging.info('Room ' + room_key + ' has state ' + str(room))
       if other_user:
         # special case the loopback scenario
         if other_user == user:

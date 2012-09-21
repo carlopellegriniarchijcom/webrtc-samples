@@ -361,7 +361,7 @@
 
   setTimeout(initialize, 1);
 
-  // Send BYE on refreshing a demo page to ensure the room is cleaned for next session.
+  // Send BYE on refreshing(or leaving) a demo page to ensure the room is cleaned for next session.
   window.onbeforeunload = function() {
     sendMessage({type: 'bye'});
   }
