@@ -33,11 +33,16 @@ def sanitize(key):
 def make_token(room, user):
   return room.key().id_or_name() + '/' + user
 
-def make_pc_config(stun_server):
+def make_pc_config(stun_server, turn_server):
   if stun_server:
-    return "STUN " + stun_server
+    stun_config = "stun:{0}".format(stun_server)
   else:
-    return "STUN stun.l.google.com:19302"
+    stun_config = "stun:" + "stun.l.google.com:19302"
+  servers = [{"url":stun_config}]
+  if turn_server:
+    turn_config = "turn:{0}".format(turn_server)
+    servers.append({"url":turn_config, "credential":""})
+  return servers
 
 class Room(db.Model):
   """All the data we store for a room"""
@@ -153,11 +158,14 @@ class MainPage(webapp.RequestHandler):
     room_key = sanitize(self.request.get('r'));
     debug = self.request.get('debug')
     stun_server = self.request.get('ss');
+    turn_server = self.request.get('ts');
     if not room_key:
       room_key = generate_random(8)
       redirect = '/?r=' + room_key
       if debug:
         redirect += ('&debug=' + debug)
+      if turn_server:
+        redirect += ('&ts=' + turn_server)
       if stun_server:
         redirect += ('&ss=' + stun_server)
       self.redirect(redirect)
@@ -192,11 +200,13 @@ class MainPage(webapp.RequestHandler):
     room_link = 'https://apprtc.appspot.com/?r=' + room_key
     if debug:
       room_link += ('&debug=' + debug)
+    if turn_server:
+      room_link += ('&ts=' + turn_server)
     if stun_server:
       room_link += ('&ss=' + stun_server)
 
     token = channel.create_channel(room_key + '/' + user)
-    pc_config = make_pc_config(stun_server)
+    pc_config = make_pc_config(stun_server, turn_server)
     template_values = {'token': token,
                        'me': user,
                        'room_key': room_key,
