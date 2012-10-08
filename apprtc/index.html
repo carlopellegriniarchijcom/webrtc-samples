@@ -170,16 +170,16 @@
   }
 
   function createPeerConnection() {
-    var servers = {{ pc_config }};
+    var pc_config = {{ pc_config|safe }};
     try {
-      pc = new webkitRTCPeerConnection({iceServers: servers});
+      pc = new webkitRTCPeerConnection(pc_config);
       pc.onicecandidate = onIceCandidate;
-      console.log("Created webkitRTCPeerConnnection with config \"" + JSON.stringify(servers) + "\".");
+      console.log("Created webkitRTCPeerConnnection with config \"" + JSON.stringify(pc_config) + "\".");
     } catch (e) {
       try {
         var stun_server = "";
-        if (servers.length !== 0) {
-          stun_server = servers[0].url.replace('stun:', 'STUN ');
+        if (pc_config.iceServers.length !== 0) {
+          stun_server = pc_config.iceServers[0].url.replace('stun:', 'STUN ');
         }
         pc = new webkitPeerConnection00(stun_server, onIceCandidate00);
         isRTCPeerConnection = false;
@@ -216,7 +216,7 @@
   }
 
   function doCall() {
-    console.log("Send offer to peer");
+    console.log("Sending offer to peer.");
     if (isRTCPeerConnection) {
       pc.createOffer(setLocalAndSendMessage, null, mediaConstraints);
     } else {
@@ -228,7 +228,7 @@
   }
 
   function doAnswer() {
-    console.log("Send answer to peer");
+    console.log("Sending answer to peer.");
     if (isRTCPeerConnection) {
       pc.createAnswer(setLocalAndSendMessage, null, mediaConstraints);
     } else {

@@ -28,21 +28,22 @@ def generate_random(len):
   return word
 
 def sanitize(key):
-  return re.sub("[^a-zA-Z0-9\-]", "-", key);
+  return re.sub('[^a-zA-Z0-9\-]', '-', key);
 
 def make_token(room, user):
   return room.key().id_or_name() + '/' + user
 
 def make_pc_config(stun_server, turn_server):
+  servers = []
   if stun_server:
-    stun_config = "stun:{0}".format(stun_server)
+    stun_config = 'stun:{}'.format(stun_server)
   else:
-    stun_config = "stun:" + "stun.l.google.com:19302"
-  servers = [{"url":stun_config}]
+    stun_config = 'stun:' + 'stun.l.google.com:19302'
+  servers.append({'url':stun_config})
   if turn_server:
-    turn_config = "turn:{0}".format(turn_server)
-    servers.append({"url":turn_config, "credential":""})
-  return servers
+    turn_config = 'turn:{}'.format(turn_server)
+    servers.append({'url':turn_config, 'credential':''})
+  return {'iceServers':servers}
 
 class Room(db.Model):
   """All the data we store for a room"""
@@ -50,12 +51,12 @@ class Room(db.Model):
   user2 = db.StringProperty()
 
   def __str__(self):
-    str = "["
+    str = '['
     if self.user1:
       str += self.user1
     if self.user2:
-      str += ", " + self.user2
-    str += "]"
+      str += ', ' + self.user2
+    str += ']'
     return str
 
   def get_occupancy(self):
@@ -180,12 +181,12 @@ class MainPage(webapp.RequestHandler):
       user = generate_random(8)
       room = Room(key_name = room_key)
       room.add_user(user)
-      if debug != "loopback":
+      if debug != 'loopback':
         initiator = 0
       else:
         room.add_user(user)
         initiator = 1
-    elif room and room.get_occupancy() == 1 and debug != "full":
+    elif room and room.get_occupancy() == 1 and debug != 'full':
       # 1 occupant.
       user = generate_random(8)
       room.add_user(user)
@@ -212,7 +213,7 @@ class MainPage(webapp.RequestHandler):
                        'room_key': room_key,
                        'room_link': room_link,
                        'initiator': initiator,
-                       'pc_config': pc_config
+                       'pc_config': json.dumps(pc_config)
                       }
     path = os.path.join(os.path.dirname(__file__), 'index.html')
     self.response.out.write(template.render(path, template_values))
