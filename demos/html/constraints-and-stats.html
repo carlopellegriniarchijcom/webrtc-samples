@@ -1,0 +1,190 @@
+<html>
+<head>
+<title>Constraints and Statistics</title>
+<script>
+var mystream;
+var pc1;
+var pc2;
+
+$ = function(id) {
+  return document.getElementById(id);
+}
+
+function log(txt) {
+  console.log(txt);
+}
+
+function openCamera() {
+  if (mystream) {
+    mystream.stop();
+  }
+  navigator.webkitGetUserMedia(cameraConstraints(), gotStream, function() {
+     log("GetUserMedia failed");
+    });
+} 
+
+function gotStream(stream) {
+  log("GetUserMedia succeeded");
+  mystream = stream;
+  $("local-video").src = webkitURL.createObjectURL(stream);
+}
+
+function cameraConstraints() {
+  var constraints = {};
+  constraints.audio = false;
+  constraints.video = { mandatory: {}, optional: [] };
+  if ($("hsize").value != "0") {
+    constraints.video.mandatory.minHsize = $("hsize").value;
+  }
+  if ($("vsize").value != "0") {
+    constraints.video.mandatory.minVsize = $("vsize").value;
+  }
+  if ($("framerate").value != "0") {
+    constraints.video.mandatory.minFramerate = $("framerate").value;
+  }
+  log('Camera constraints are ' + JSON.stringify(constraints));
+  $("cameraConstraints").innerHTML = JSON.stringify(constraints, null, ' ');
+  return constraints;
+}
+
+function streamConstraints() {
+  var constraints = {};
+  constraints.video = { mandatory: {}, optional: [] };
+  if ($("bandwidth").value != "0") {
+    constraints.video.optional[0] = { 'bandwidth' : $('bandwidth').value };
+  }
+  log('Constraints are ' + JSON.stringify(constraints));
+  $("addStreamConstraints").innerHTML = JSON.stringify(constraints, null, ' ');
+  return constraints;
+}
+
+
+
+function connect() {
+  pc1 = new webkitRTCPeerConnection(null);
+  pc2 = new webkitRTCPeerConnection(null);
+  pc1.addStream(mystream, streamConstraints());
+  log('PC1 creating offer');
+  pc1.onnegotiationeeded = function() {
+    log('Negotiation needed - PC1');
+  }
+  pc2.onnegotiationeeded = function() {
+    log('Negotiation needed - PC2');
+  }
+  pc1.onicecandidate = function(e) {
+    log('Candidate PC1');
+    pc2.addIceCandidate(new RTCIceCandidate(event.candidate));
+  }
+  pc2.onicecandidate = function(e) {
+    log('Candidate PC2');
+    pc1.addIceCandidate(new RTCIceCandidate(event.candidate));
+  }
+  pc2.onaddstream = function(e) {
+    log('PC2 got stream');
+    $('remote-video').src = webkitURL.createObjectURL(e.stream);
+    log('Remote video is ' + $('remote-video').src);
+  } 
+  pc1.createOffer(function(desc) {
+    log('PC1 offering');
+    pc1.setLocalDescription(desc);
+    pc2.setRemoteDescription(desc);
+    pc2.createAnswer(function(desc2) {
+      log('PC2 answering');
+      pc2.setLocalDescription(desc2);
+      pc1.setRemoteDescription(desc2);
+    });
+  });
+}
+
+// Display statistics
+var statCollector = setInterval(function() {
+  var display = function(str) {
+    $('bitrate').innerHTML = str;
+  }
+
+  display("No stream");
+  if (pc2 && pc2.remoteStreams[0]) {
+    if (pc2.getStats) {
+      display('No stats callback');
+      pc2.getStats(function(stats) {
+        log('Got stats' + JSON.stringify(stats));
+        display('No bitrate stats');
+      });
+    } else {
+      display('No stats function. Use at least Chrome 24.0.1285');
+    }
+  } else {
+    log('Not connected yet');
+  }
+}, 1000);
+
+// Utility to show the value of a field in a span called name+Display
+function showValue(name, value) {
+  $(name + 'Display').innerHTML = value;
+}
+</script>
+</head>
+<body>
+<h1>Constraints and Statistics</h1>
+This page is meant to give some hints on how one can use constraints and statistics in WebRTC applications.
+<p>
+The form to the left gives constraints you can set on the getUserMedia call.
+When you hit "open", it will (re)open the camera with these constraints.
+<p>
+The left picture is the local preview. The right picture is the picture
+after being passed through the PeerConnection (locally).
+<p>
+Underneath the picture you will see a running display of how many Kbits/sec
+the video feed uses for transmission.
+<hr>
+<table>
+<tr>
+<td align="top">
+<h2>getUserMedia constraints</h2>
+Min horizontal size
+<input type="range" id="hsize" min="0" max="1280" value="640"
+  onchange="showValue(this.id, this.value)">
+<span id="hsizeDisplay">640</span>
+<br>
+Min vertical size
+<input type="range" id="vsize" min="0" max="1280" value="480"
+  onchange="showValue(this.id, this.value)">
+<span id="vsizeDisplay">480</span>
+<br>
+Framerate
+<input type="range" id="framerate" min="0" max="60" value="30"
+  onchange="showValue(this.id, this.value)">
+<span id="framerateDisplay">30</span>
+<br>
+<input type="submit" name="capture" value="Capture!" onclick="openCamera()">
+</td>
+<td align="top">
+<h2>addStream constraints</h2>
+Maximum bitrate
+<input type="range" id="bandwidth" min="0" max="2000" value="1000"
+  onchange="showValue(this.id, this.value)">
+<span id="bandwidthDisplay">1000</span>
+<br>
+<input type="submit" name="connect" value="Connect!" onclick="connect()">
+</td>
+</tr>
+<tr>
+<td>
+<video id="local-video" autoplay width=400></video>
+</td>
+<td>
+<video id="remote-video" autoplay width=400></video>
+</td>
+<tr>
+<td><td>
+<span id="bitrate">Bitrate unknown</span>
+</td>
+</tr>
+<tr>
+<td><pre><span id="cameraConstraints"></span></pre>
+<td><pre><span id="addStreamConstraints"></span></pre>
+</table>
+</body>
+</html>
+
+
