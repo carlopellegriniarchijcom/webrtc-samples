@@ -24,6 +24,7 @@
     padding: 0;
   }
   #container {
+    background-color: #000000;
     position: relative;
     min-height: 100%;
     width: 100%;
@@ -120,6 +121,8 @@
   var started = false;
   var isRTCPeerConnection = true;
   var mediaConstraints = {'has_audio':true, 'has_video':true};
+  var isVideoMuted = false;
+  var isAudioMuted = false;
 
   function initialize() {
     console.log("Initializing; room={{ room_key }}.");
@@ -387,6 +390,8 @@
   function stop() {
     started = false;
     isRTCPeerConnection = true;
+    isAudioMuted = false;
+    isVideoMuted = false;
     pc.close();
     pc = null;
   }
@@ -419,16 +424,83 @@
     setStatus("You have left the call. <a href=\"{{ room_link }}\">Click here</a> to rejoin.");
   }
   function enterFullScreen() {
-    remote.webkitRequestFullScreen();
+    container.webkitRequestFullScreen();
+  }
+
+  function toggleVideoMute() {
+    if (localStream.videoTracks.length === 0) {
+      console.log("No local video available.");
+      return;
+    }
+
+    if (isVideoMuted) {
+      for (i = 0; i < localStream.videoTracks.length; i++) {
+        localStream.videoTracks[i].enabled = true;
+      }
+      console.log("Video unmuted.");
+    } else {
+      for (i = 0; i < localStream.videoTracks.length; i++) {
+        localStream.videoTracks[i].enabled = false;
+      }
+      console.log("Video muted.");
+    }
+
+    isVideoMuted = !isVideoMuted;    
+  }
+
+  function toggleAudioMute() {
+    if (localStream.audioTracks.length === 0) {
+      console.log("No local audio available.");
+      return;
+    }
+
+    if (isAudioMuted) {
+      for (i = 0; i < localStream.audioTracks.length; i++) {
+        localStream.audioTracks[i].enabled = true;
+      }
+      console.log("Audio unmuted.");
+    } else {
+      for (i = 0; i < localStream.audioTracks.length; i++){
+        localStream.audioTracks[i].enabled = false;
+      }
+      console.log("Audio muted.");
+    }
+
+    isAudioMuted = !isAudioMuted;  
   }
 
   setTimeout(initialize, 1);
 
-  // Send BYE on refreshing(or leaving) a demo page to ensure the room is cleaned for next session.
+  // Send BYE on refreshing(or leaving) a demo page
+  // to ensure the room is cleaned for next session.
   window.onbeforeunload = function() {
     sendMessage({type: 'bye'});
   }
 
+  // Ctrl-D: toggle audio mute; Ctrl-E: toggle video mute.
+  // On Mac, Command key is instead of Ctrl.
+  // Return false to screen out original Chrome shortcuts.
+  document.onkeydown = function() {
+    if (navigator.appVersion.indexOf("Mac") != -1) {
+      if (event.metaKey && event.keyCode === 68) {
+        toggleAudioMute();
+        return false;
+      }
+      if (event.metaKey && event.keyCode === 69) {
+        toggleVideoMute();
+        return false;
+      }
+    } else {
+      if (event.ctrlKey && event.keyCode === 68) {
+        toggleAudioMute();
+        return false;
+      }
+      if (event.ctrlKey && event.keyCode === 69) {
+        toggleVideoMute();
+        return false;
+      }
+    }
+}
 </script>
 <div id="container" ondblclick="enterFullScreen()"> 
   <div id="card">
@@ -445,9 +517,9 @@
   </div>
   <div id="footer">
   </div>
+  <a href="http://www.webrtc.org">
+  <img id="logo" alt="WebRTC" src="images/webrtc_black_20p.png">
+  </a>
 </div>
-<a href="http://www.webrtc.org">
-<img id="logo" alt="WebRTC" src="images/webrtc_black_20p.png">
-</a>
 </body>
 </html>

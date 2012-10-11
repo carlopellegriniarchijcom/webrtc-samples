@@ -144,6 +144,7 @@ class MessagePage(webapp.RequestHandler):
           message = message.replace("\"offer\"", "\"answer\"")
           message = message.replace("a=crypto:0 AES_CM_128_HMAC_SHA1_32",
                                     "a=xrypto:0 AES_CM_128_HMAC_SHA1_32")
+          message = message.replace("a=ice-options:google-ice\\r\\n", "")
         channel.send_message(make_token(room, other_user), message)
         logging.info('Delivered message to user ' + other_user);
     else:
