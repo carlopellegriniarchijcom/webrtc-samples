@@ -64,7 +64,7 @@ getUserMedia();
 }
 
 getUserMedia = function() {
-try { navigator.webkitGetUserMedia("video,audio", onGotStream, onFailedStream);
+try { navigator.webkitGetUserMedia({video:true,audio:true}, onGotStream, onFailedStream);
 //trace("Requested access to local media");
 } catch (e) {
 alert("getUserMedia error " + e);

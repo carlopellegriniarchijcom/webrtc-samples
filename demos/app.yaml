@@ -13,6 +13,14 @@ handlers:
   static_dir: html
   secure: always
 
+- url: /images
+  static_dir: images
+  secure: always
+
+- url: /js
+  static_dir: js
+  secure: always
+
 - url: .*
   script: main.app
   secure: always
