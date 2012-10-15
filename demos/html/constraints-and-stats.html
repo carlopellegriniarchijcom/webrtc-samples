@@ -33,14 +33,14 @@ function cameraConstraints() {
   var constraints = {};
   constraints.audio = false;
   constraints.video = { mandatory: {}, optional: [] };
-  if ($("hsize").value != "0") {
-    constraints.video.mandatory.minHsize = $("hsize").value;
+  if ($("width").value != "0") {
+    constraints.video.mandatory.minWidth = $("width").value;
   }
-  if ($("vsize").value != "0") {
-    constraints.video.mandatory.minVsize = $("vsize").value;
+  if ($("height").value != "0") {
+    constraints.video.mandatory.minHeight = $("height").value;
   }
-  if ($("framerate").value != "0") {
-    constraints.video.mandatory.minFramerate = $("framerate").value;
+  if ($("frameRate").value != "0") {
+    constraints.video.mandatory.minFrameRate = $("frameRate").value;
   }
   log('Camera constraints are ' + JSON.stringify(constraints));
   $("cameraConstraints").innerHTML = JSON.stringify(constraints, null, ' ');
@@ -142,19 +142,19 @@ the video feed uses for transmission.
 <td align="top">
 <h2>getUserMedia constraints</h2>
 Min horizontal size
-<input type="range" id="hsize" min="0" max="1280" value="640"
+<input type="range" id="width" min="0" max="1280" value="640"
   onchange="showValue(this.id, this.value)">
-<span id="hsizeDisplay">640</span>
+<span id="widthDisplay">640</span>
 <br>
 Min vertical size
-<input type="range" id="vsize" min="0" max="1280" value="480"
+<input type="range" id="height" min="0" max="1280" value="480"
   onchange="showValue(this.id, this.value)">
-<span id="vsizeDisplay">480</span>
+<span id="heightDisplay">480</span>
 <br>
-Framerate
-<input type="range" id="framerate" min="0" max="60" value="30"
+FrameRate
+<input type="range" id="frameRate" min="0" max="60" value="30"
   onchange="showValue(this.id, this.value)">
-<span id="framerateDisplay">30</span>
+<span id="frameRateDisplay">30</span>
 <br>
 <input type="submit" name="capture" value="Capture!" onclick="openCamera()">
 </td>
