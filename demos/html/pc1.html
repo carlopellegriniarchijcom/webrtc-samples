@@ -44,7 +44,7 @@ function trace(text) {
   if (text[text.length - 1] == '\n') {
     text = text.substring(0, text.length - 1);
   }
-  console.log((performance.webkitNow() / 1000).toFixed(3) + ": " + text);
+  console.log((performance.now() / 1000).toFixed(3) + ": " + text);
 }
 
 function gotStream(stream){
@@ -82,13 +82,13 @@ function call() {
   trace("Adding Local Stream to peer connection");
   
   pc1.createOffer(gotDescription1);
-  pc2.createAnswer(gotDescription2);
 }
 
 function gotDescription1(desc){
   pc1.setLocalDescription(desc);
   trace("Offer from pc1 \n" + desc.sdp);
   pc2.setRemoteDescription(desc);
+  pc2.createAnswer(gotDescription2);
 }
 
 function gotDescription2(desc){
