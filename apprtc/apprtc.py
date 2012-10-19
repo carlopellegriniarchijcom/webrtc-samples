@@ -15,11 +15,13 @@ import os
 import random
 import re
 import json
+import jinja2
+import webapp2
 from google.appengine.api import channel
 from google.appengine.ext import db
-from google.appengine.ext import webapp
-from google.appengine.ext.webapp import template
-from google.appengine.ext.webapp.util import run_wsgi_app
+
+jinja_environment = jinja2.Environment(
+    loader=jinja2.FileSystemLoader(os.path.dirname(__file__)))
 
 def generate_random(len):
   word = ''
@@ -102,14 +104,14 @@ class Room(db.Model):
       self.delete()
 
 
-class ConnectPage(webapp.RequestHandler):
+class ConnectPage(webapp2.RequestHandler):
   def post(self):
     key = self.request.get('from')
     room_key, user = key.split('/');
     logging.info('User ' + user + ' connected to room ' + room_key)
 
 
-class DisconnectPage(webapp.RequestHandler):
+class DisconnectPage(webapp2.RequestHandler):
   def post(self):
     key = self.request.get('from')
     room_key, user = key.split('/');
@@ -125,7 +127,7 @@ class DisconnectPage(webapp.RequestHandler):
     logging.warning('User ' + user + ' disconnected from room ' + room_key)
 
 
-class MessagePage(webapp.RequestHandler):
+class MessagePage(webapp2.RequestHandler):
   def post(self):
     message = self.request.body
     message_obj = json.loads(message)
@@ -151,7 +153,7 @@ class MessagePage(webapp.RequestHandler):
       logging.warning('Unknown room ' + room_key)
 
 
-class MainPage(webapp.RequestHandler):
+class MainPage(webapp2.RequestHandler):
   """The main UI page, renders the 'index.html' template."""
 
   def get(self):
@@ -194,9 +196,9 @@ class MainPage(webapp.RequestHandler):
       initiator = 1
     else:
       # 2 occupants (full).
-      path = os.path.join(os.path.dirname(__file__), 'full.html')
-      self.response.out.write(template.render(path, { 'room_key': room_key }));
-      logging.info('Room ' + room_key + ' is full');
+      template = jinja_environment.get_template('full.html')
+      self.response.out.write(template.render({ 'room_key': room_key }))
+      logging.info('Room ' + room_key + ' is full')
       return
 
     room_link = 'https://apprtc.appspot.com/?r=' + room_key
@@ -216,22 +218,15 @@ class MainPage(webapp.RequestHandler):
                        'initiator': initiator,
                        'pc_config': json.dumps(pc_config)
                       }
-    path = os.path.join(os.path.dirname(__file__), 'index.html')
-    self.response.out.write(template.render(path, template_values))
-    logging.info('User ' + user + ' added to room ' + room_key);
+    template = jinja_environment.get_template('index.html')
+    self.response.out.write(template.render(template_values))
+    logging.info('User ' + user + ' added to room ' + room_key)
     logging.info('Room ' + room_key + ' has state ' + str(room))
 
 
-application = webapp.WSGIApplication([
+app = webapp2.WSGIApplication([
     ('/', MainPage),
     ('/message', MessagePage),
     ('/_ah/channel/connected/', ConnectPage),
     ('/_ah/channel/disconnected/', DisconnectPage)
   ], debug=True)
-
-
-def main():
-  run_wsgi_app(application)
-
-if __name__ == "__main__":
-  main()
