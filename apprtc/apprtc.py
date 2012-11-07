@@ -156,10 +156,12 @@ class ConnectPage(webapp2.RequestHandler):
     key = self.request.get('from')
     room_key, user = key.split('/');
     room = Room.get_by_key_name(room_key)
-    if room:
+    if room and room.has_user(user):
       room.set_connected(user)
-    send_saved_messages(make_token(room, user))
-    logging.info('User ' + user + ' connected to room ' + room_key)
+      send_saved_messages(make_token(room, user))
+      logging.info('User ' + user + ' connected to room ' + room_key)
+    else:
+      logging.warning('Unexpected Connect Message to room ' + room_key)
 
 
 class DisconnectPage(webapp2.RequestHandler):
