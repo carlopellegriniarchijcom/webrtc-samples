@@ -16,7 +16,10 @@ To run this test:
   var socket;
   var expected_message_num = 8;
   var receive = 0;
-  
+  var test_msg =
+      '01234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  var msg_larger_than_500 = "";
+
   function trace(txt) {
     // This function is used for logging.
     var elem = document.getElementById("debug");
@@ -33,13 +36,17 @@ To run this test:
       'onclose': onChannelClosed
     };
 
+    for (i = 0; i < 9; ++i) {
+      msg_larger_than_500 += test_msg;
+    }
+ 
     for (i = 0; i < 4; ++i) {
-      sendMessage({type: 'test', data: i});
+      sendMessage({type: 'test', msgid: i, msg: msg_larger_than_500});
     }
     trace('channel.open');
     socket = channel.open(handler);
     for (i = 4; i < expected_message_num; ++i) {
-      sendMessage({type: 'test', data: i});
+      sendMessage({type: 'test', msgid: i, msg: msg_larger_than_500});
     }
   }
 
@@ -56,7 +63,8 @@ To run this test:
     trace('Channel opened.');
   }
   function onChannelMessage(message) {
-    if (message.data != JSON.stringify({type: 'test', data: receive})) {
+    if (message.data != JSON.stringify({type: 'test', msgid: receive,
+                                        msg: msg_larger_than_500})) {
       trace('ERROR: Expect: ' + receive + ' Actual: ' + message.data);
     } else {
       trace('S->C: ' + message.data);

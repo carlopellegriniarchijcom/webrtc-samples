@@ -77,7 +77,7 @@ def on_message(room, user, message):
 # receiver client is not ready to receive the messages.
 class Message(db.Model):
   token = db.StringProperty()
-  msg = db.StringProperty()
+  msg = db.TextProperty()
 
 class Room(db.Model):
   """All the data we store for a room"""
