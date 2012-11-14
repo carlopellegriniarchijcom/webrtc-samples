@@ -119,7 +119,7 @@
   var initiator = {{ initiator }};
   var started = false;
   var isRTCPeerConnection = true;
-  var mediaConstraints = {'has_audio':true, 'has_video':true};
+  var mediaConstraints = {'mandatory': {'OfferToReceiveAudio':true, 'OfferToReceiveVideo':true}};
   var isVideoMuted = false;
   var isAudioMuted = false;
 
