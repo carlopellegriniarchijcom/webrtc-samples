@@ -48,10 +48,9 @@ function cameraConstraints() {
 }
 
 function streamConstraints() {
-  var constraints = {};
-  constraints.video = { mandatory: {}, optional: [] };
+  var constraints = { mandatory: {}, optional: [] };
   if ($("bandwidth").value != "0") {
-    constraints.video.optional[0] = { 'bandwidth' : $('bandwidth').value };
+    constraints.optional[0] = { 'bandwidth' : $('bandwidth').value };
   }
   log('Constraints are ' + JSON.stringify(constraints));
   $("addStreamConstraints").innerHTML = JSON.stringify(constraints, null, ' ');
