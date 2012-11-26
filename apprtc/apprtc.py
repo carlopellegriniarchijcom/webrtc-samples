@@ -22,6 +22,8 @@ from google.appengine.ext import db
 
 jinja_environment = jinja2.Environment(
     loader=jinja2.FileSystemLoader(os.path.dirname(__file__)))
+# Set the channel token expiration to 30 min, instead 120 min by default.
+TOKEN_TIMEOUT = 30
 
 def generate_random(len):
   word = ''
@@ -30,9 +32,9 @@ def generate_random(len):
   return word
 
 def sanitize(key):
-  return re.sub('[^a-zA-Z0-9\-]', '-', key);
+  return re.sub('[^a-zA-Z0-9\-]', '-', key)
 
-def make_token(room, user):
+def make_client_id(room, user):
   return room.key().id_or_name() + '/' + user
 
 def make_pc_config(stun_server, turn_server):
@@ -47,31 +49,56 @@ def make_pc_config(stun_server, turn_server):
     servers.append({'url':turn_config, 'credential':''})
   return {'iceServers':servers}
 
-def get_saved_messages(token):
-  return Message.gql("WHERE token = :tk", tk=token)
+def create_channel(room, user, duration_minutes):
+  client_id = make_client_id(room, user)
+  return channel.create_channel(client_id, duration_minutes)
 
-def delete_saved_messages(token):
-  messages = get_saved_messages(token)
+def handle_message(room, user, message):
+  message_obj = json.loads(message)
+  other_user = room.get_other_user(user)
+  room_key = room.key().id_or_name();
+  if message_obj['type'] == 'tokenRequest':
+    token = create_channel(room, user, TOKEN_TIMEOUT)
+    channel.send_message(make_client_id(room, user),
+                         json.dumps({"type":"tokenResponse", "token": token}))
+    return
+
+  if message_obj['type'] == 'bye':
+    room.remove_user(user)
+    logging.info('User ' + user + ' quit from room ' + room_key)
+    logging.info('Room ' + room_key + ' has state ' + str(room))
+  if other_user:
+    # special case the loopback scenario
+    if message_obj['type'] == 'offer' and other_user == user:
+      message = message.replace("\"offer\"", "\"answer\"")
+      message = message.replace("a=ice-options:google-ice\\r\\n", "")
+    on_message(room, other_user, message)
+
+def get_saved_messages(client_id):
+  return Message.gql("WHERE client_id = :id", id=client_id)
+
+def delete_saved_messages(client_id):
+  messages = get_saved_messages(client_id)
   for message in messages:
     message.delete()
-    logging.info('Deleted the saved message for ' + token)
+    logging.info('Deleted the saved message for ' + client_id)
 
-def send_saved_messages(token):
-  messages = get_saved_messages(token)
+def send_saved_messages(client_id):
+  messages = get_saved_messages(client_id)
   for message in messages:
-    channel.send_message(token, message.msg)
-    logging.info('Delivered saved message to ' + token);
+    channel.send_message(client_id, message.msg)
+    logging.info('Delivered saved message to ' + client_id);
     message.delete()
 
 def on_message(room, user, message):
-  token = make_token(room, user)
+  client_id = make_client_id(room, user)
   if room.is_connected(user):
-    channel.send_message(token, message)
-    logging.info('Delivered message to ' + token);
+    channel.send_message(client_id, message)
+    logging.info('Delivered message to user ' + user);
   else:
-    new_message = Message(token = token, msg = message)
+    new_message = Message(id = client_id, msg = message)
     new_message.put()
-    logging.info('Saved message for ' + token)
+    logging.info('Saved message for user ' + user)
 
 def make_constraints(hd_video):
   constraints = { 'optional': [], 'mandatory': {} }
@@ -140,7 +167,7 @@ class Room(db.Model):
     self.put()
 
   def remove_user(self, user):
-    delete_saved_messages(make_token(self, user))
+    delete_saved_messages(make_client_id(self, user))
     if user == self.user2:
       self.user2 = None
     if user == self.user1:
@@ -170,13 +197,13 @@ class Room(db.Model):
 class ConnectPage(webapp2.RequestHandler):
   def post(self):
     key = self.request.get('from')
-    room_key, user = key.split('/');
+    room_key, user = key.split('/')
     room = Room.get_by_key_name(room_key)
     # Check if room has user in case that disconnect message comes before
     # connect message with unknown reason, observed with local AppEngine SDK.
     if room and room.has_user(user):
       room.set_connected(user)
-      send_saved_messages(make_token(room, user))
+      send_saved_messages(make_client_id(room, user))
       logging.info('User ' + user + ' connected to room ' + room_key)
     else:
       logging.warning('Unexpected Connect Message to room ' + room_key)
@@ -185,7 +212,7 @@ class ConnectPage(webapp2.RequestHandler):
 class DisconnectPage(webapp2.RequestHandler):
   def post(self):
     key = self.request.get('from')
-    room_key, user = key.split('/');
+    room_key, user = key.split('/')
     room = Room.get_by_key_name(room_key)
     if room and room.has_user(user):
       other_user = room.get_other_user(user)
@@ -193,7 +220,7 @@ class DisconnectPage(webapp2.RequestHandler):
       logging.info('User ' + user + ' removed from room ' + room_key)
       logging.info('Room ' + room_key + ' has state ' + str(room))
       if other_user:
-        channel.send_message(make_token(room, other_user), '{"type":"bye"}')
+        channel.send_message(make_client_id(room, other_user), '{"type":"bye"}')
         logging.info('Sent BYE to ' + other_user)
     logging.warning('User ' + user + ' disconnected from room ' + room_key)
 
@@ -201,25 +228,13 @@ class DisconnectPage(webapp2.RequestHandler):
 class MessagePage(webapp2.RequestHandler):
   def post(self):
     message = self.request.body
-    message_obj = json.loads(message)
     room_key = self.request.get('r')
+    user = self.request.get('u')
     room = Room.get_by_key_name(room_key)
     if room:
-      user = self.request.get('u')
-      other_user = room.get_other_user(user)
-      if message_obj['type'] == 'bye':
-        room.remove_user(user)
-        logging.info('User ' + user + ' quit from room ' + room_key)
-        logging.info('Room ' + room_key + ' has state ' + str(room))
-      if other_user:
-        # special case the loopback scenario
-        if other_user == user:
-          message = message.replace("\"offer\"", "\"answer\"")
-          message = message.replace("a=ice-options:google-ice\\r\\n", "")
-        on_message(room, other_user, message)
+      handle_message(room, user, message)
     else:
       logging.warning('Unknown room ' + room_key)
-
 
 class MainPage(webapp2.RequestHandler):
   """The main UI page, renders the 'index.html' template."""
@@ -289,10 +304,11 @@ class MainPage(webapp2.RequestHandler):
     if hd_video:
       room_link += ('&hd=' + hd_video)
 
-    token = channel.create_channel(room_key + '/' + user)
+    token = create_channel(room, user, TOKEN_TIMEOUT)
     pc_config = make_pc_config(stun_server, turn_server)
     media_constraints = make_constraints(hd_video)
     template_values = {'token': token,
+                       'token_timeout': TOKEN_TIMEOUT*60,
                        'me': user,
                        'room_key': room_key,
                        'room_link': room_link,
