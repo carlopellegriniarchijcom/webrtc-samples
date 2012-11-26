@@ -73,8 +73,24 @@ def on_message(room, user, message):
     new_message.put()
     logging.info('Saved message for ' + token)
 
+def make_constraints(hd_video):
+  constraints = { 'optional': [], 'mandatory': {} }
+  # Demo 16:9 video with media constraints.
+  if hd_video.lower() == 'true':
+    # Demo with WHD by setting size with 1280x720.
+    constraints['mandatory']['minHeight'] = 720
+    constraints['mandatory']['minWidth'] = 1280
+  else:
+    # Demo with WVGA by setting Aspect Ration;
+    constraints['mandatory']['maxAspectRatio'] = 1.778
+    constraints['mandatory']['minAspectRatio'] = 1.777
+
+  return constraints
+
 # This database is to store the messages from the sender client when the
 # receiver client is not ready to receive the messages.
+# Use TextProperty instead of StringProperty for msg because
+# the session description can be more than 500 characters.
 class Message(db.Model):
   token = db.StringProperty()
   msg = db.TextProperty()
@@ -156,6 +172,8 @@ class ConnectPage(webapp2.RequestHandler):
     key = self.request.get('from')
     room_key, user = key.split('/');
     room = Room.get_by_key_name(room_key)
+    # Check if room has user in case that disconnect message comes before
+    # connect message with unknown reason, observed with local AppEngine SDK.
     if room and room.has_user(user):
       room.set_connected(user)
       send_saved_messages(make_token(room, user))
@@ -209,11 +227,12 @@ class MainPage(webapp2.RequestHandler):
   def get(self):
     """Renders the main page. When this page is shown, we create a new
     channel to push asynchronous updates to the client."""
-    room_key = sanitize(self.request.get('r'));
+    room_key = sanitize(self.request.get('r'))
     debug = self.request.get('debug')
     unittest = self.request.get('unittest')
-    stun_server = self.request.get('ss');
-    turn_server = self.request.get('ts');
+    stun_server = self.request.get('ss')
+    turn_server = self.request.get('ts')
+    hd_video = self.request.get('hd')
 
     if unittest:
       # Always create a new room for the unit tests.
@@ -228,6 +247,9 @@ class MainPage(webapp2.RequestHandler):
         redirect += ('&ts=' + turn_server)
       if stun_server:
         redirect += ('&ss=' + stun_server)
+      if hd_video:
+        redirect += ('&hd=' + hd_video)
+ 
       self.redirect(redirect)
       logging.info('Redirecting visitor to base URL to ' + redirect)
       return
@@ -264,18 +286,22 @@ class MainPage(webapp2.RequestHandler):
       room_link += ('&ts=' + turn_server)
     if stun_server:
       room_link += ('&ss=' + stun_server)
+    if hd_video:
+      room_link += ('&hd=' + hd_video)
 
     token = channel.create_channel(room_key + '/' + user)
     pc_config = make_pc_config(stun_server, turn_server)
+    media_constraints = make_constraints(hd_video)
     template_values = {'token': token,
                        'me': user,
                        'room_key': room_key,
                        'room_link': room_link,
                        'initiator': initiator,
-                       'pc_config': json.dumps(pc_config)
+                       'pc_config': json.dumps(pc_config),
+                       'media_constraints': json.dumps(media_constraints)
                       }
     if unittest:
-      target_page = 'test_' + unittest + '.html'
+      target_page = 'test/test_' + unittest + '.html'
     else:
       target_page = 'index.html'
 

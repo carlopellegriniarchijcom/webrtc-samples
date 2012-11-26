@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Apprtc Audio Codec Test</title>
+<style>
+video {
+  border:5px solid black;
+  width:480px;
+  height:360px;
+}
+pre{border:1px solid black;}
+</style>
+</head>
+<body>
+<video id="vid1" autoplay></video>
+<video id="vid2" autoplay></video>
+<br>
+<span>Audio Codec</span>
+<br>
+<select id="AudioCodec">
+  <option value="103">iSAC</option>
+  <option value="104">iSAC-swb</option>
+  <option value="111">Opus</option>
+  <option value="0">PCMU</option>
+  <option value="8">PCMA</option>
+</select>
+<button id="btn1" onclick="start()">Start</button>
+<button id="btn2" onclick="call()">Call</button>
+<button id="btn3" onclick="hangup()">Hang Up</button>
+<br>
+<pre id="debug"></pre>
+<script>
+//var vid1 = document.getElementById("vid1");
+//var vid2 = document.getElementById("vid2");
+btn1.disabled = false;
+btn2.disabled = true;
+btn3.disabled = true;
+var pc1,pc2;
+var localstream;
+
+function trace(txt) {
+  // This function is used for logging.
+  var elem = document.getElementById("debug");
+  elem.innerHTML += txt + "<br>";
+}
+
+function start() {
+  btn1.disabled = true;
+  navigator.webkitGetUserMedia({'audio':true, 'video':true},
+                               gotStream, function() {});
+}  
+
+function gotStream(stream){
+  vid1.src = webkitURL.createObjectURL(stream);
+  localstream = stream;
+  btn2.disabled = false;
+  trace("Please slect Audio Codec and make a call.");
+}
+
+function call() {
+  btn2.disabled = true;
+  btn3.disabled = false;
+  trace("Starting call");
+//  if (localstream.videoTracks.length > 0)
+//    trace('Using Video device: ' + localstream.videoTracks[0].label);  
+//  if (localstream.audioTracks.length > 0)
+//    trace('Using Audio device: ' + localstream.audioTracks[0].label);
+  var servers = null;
+  pc1 = new webkitRTCPeerConnection(servers);
+  pc1.onicecandidate = iceCallback1; 
+  pc2 = new webkitRTCPeerConnection(servers);
+  pc2.onicecandidate = iceCallback2;
+  pc2.onaddstream = gotRemoteStream; 
+  trace("create offer.");
+  pc1.addStream(localstream);
+  pc1.createOffer(gotDescription1);
+}
+
+function gotDescription1(desc){
+  desc.sdp = selectAudioCodec(desc.sdp);
+  pc1.setLocalDescription(desc);
+  pc2.setRemoteDescription(desc);
+  trace("create answer.");
+  pc2.createAnswer(gotDescription2);
+}
+
+function gotDescription2(desc){
+  desc.sdp = selectAudioCodec(desc.sdp);
+  pc2.setLocalDescription(desc);
+  pc1.setRemoteDescription(desc);
+}
+
+function selectAudioCodec(sdp) {
+  var codecList = document.getElementById("AudioCodec");
+  var index = codecList.selectedIndex;
+  var plType = codecList.options[index].value;
+  var hasOpus = (sdp.search(/a=rtpmap:111 opus\/48000/i) !== -1);
+  if ((plType === "111") && !hasOpus) {
+    trace("Opus is not available for this client. Default iSAC is applied");
+    return sdp;
+  }
+
+  var codecs = [plType];
+  for (var i = 0; i < codecList.length; i++) {
+    if (i !== index) {
+      if (codecList.options[i].value !== "111" || hasOpus)
+        codecs.push(codecList.options[i].value);
+    }
+  }
+
+  if (hasOpus)
+    sdp = sdp.replace('103 104 111 0 8', codecs.join(" "));
+  else
+    sdp = sdp.replace('103 104 0 8', codecs.join(" "));
+
+  // TODO: remove swaping when issue 1080 is fixed
+  var sourceLine = "a=rtpmap:103 ISAC/16000";
+  var targetLine = sourceLine;
+  if (plType === "104")
+      targetLine = "a=rtpmap:104 ISAC/32000";
+  else if (plType === "111")
+      targetLine = "a=rtpmap:111 opus/48000";
+  else if (plType === "0")
+      targetLine = "a=rtpmap:0 PCMU/8000";
+  else if (plType === "8")
+      targetLine = "a=rtpmap:8 PCMU/8000";
+ 
+  sdp = swapSdpLines(sdp, sourceLine, targetLine);
+  trace(sdp);
+  return sdp;
+}
+
+function swapSdpLines(sdp, line, swapWith) {	
+  var lines = sdp.split('\r\n');	
+  var lineStart = lines.indexOf(line);	
+  var swapLineStart = lines.indexOf(swapWith);	
+  if (lineStart == -1 || swapLineStart == -1)	
+    return sdp;  // This generally happens on the first message.	
+
+  var tmp = lines[lineStart];	
+  lines[lineStart] = lines[swapLineStart];	
+  lines[swapLineStart] = tmp;	
+  return lines.join('\r\n');	
+}
+function hangup() {
+  trace("Ending call");
+  pc1.close(); 
+  pc2.close();
+  pc1 = null;
+  pc2 = null;
+  btn3.disabled = true;
+  btn2.disabled = false;
+}
+
+function gotRemoteStream(e){
+  vid2.src = webkitURL.createObjectURL(e.stream);
+  trace("Received remote stream");
+  trace("Please listen and verify if the selected codec is working");
+}
+
+function iceCallback1(event){
+  if (event.candidate) {
+    pc2.addIceCandidate(new RTCIceCandidate(event.candidate));
+  }
+}
+      
+function iceCallback2(event){
+  if (event.candidate) {
+    pc1.addIceCandidate(new RTCIceCandidate(event.candidate));
+  }
+}
+</script>
+</body>
+</html>
+
+
