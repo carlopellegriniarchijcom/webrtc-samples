@@ -31,7 +31,7 @@ function gotStream(stream) {
 
 function cameraConstraints() {
   var constraints = {};
-  constraints.audio = false;
+  constraints.audio = true;
   constraints.video = { mandatory: {}, optional: [] };
   if ($("width").value != "0") {
     constraints.video.mandatory.minWidth = $("width").value;
@@ -72,17 +72,21 @@ function connect() {
   }
   pc1.onicecandidate = function(e) {
     log('Candidate PC1');
-    pc2.addIceCandidate(new RTCIceCandidate(event.candidate));
+    if (e.candidate) {
+      pc2.addIceCandidate(new RTCIceCandidate(e.candidate));
+    }
   }
   pc2.onicecandidate = function(e) {
     log('Candidate PC2');
-    pc1.addIceCandidate(new RTCIceCandidate(event.candidate));
+    if (e.candidate) {
+      pc1.addIceCandidate(new RTCIceCandidate(e.candidate));
+    }
   }
   pc2.onaddstream = function(e) {
     log('PC2 got stream');
     $('remote-video').src = webkitURL.createObjectURL(e.stream);
     log('Remote video is ' + $('remote-video').src);
-  } 
+  }
   pc1.createOffer(function(desc) {
     log('PC1 offering');
     pc1.setLocalDescription(desc);
@@ -106,7 +110,26 @@ var statCollector = setInterval(function() {
     if (pc2.getStats) {
       display('No stats callback');
       pc2.getStats(function(stats) {
-        log('Got stats' + JSON.stringify(stats));
+        log('Raw stats ' + stats);
+        var statsString = '';
+        var results = stats.result();
+        log('Raw results ' + results);
+        for (var i = 0; i < results.length; ++i) {
+          var res = results[i];
+          log(i + ': ' + JSON.stringify(res));
+          statsString += '<h3>Report ';
+          statsString += i;
+          statsString += '</h3>';
+          if (res.local) {
+            statsString += "<p>Local ";
+            statsString += dumpStats(res.local);
+          }
+          if (res.remote) {
+            statsString += "<p>Remote ";
+            statsString += dumpStats(res.remote);
+          }
+        }
+        $('stats').innerHTML = statsString;
         display('No bitrate stats');
       });
     } else {
@@ -116,6 +139,32 @@ var statCollector = setInterval(function() {
     log('Not connected yet');
   }
 }, 1000);
+
+// Dumping a stats variable as a string.
+// might be named toString?
+function dumpStats(obj) {
+  var statsString = 'Timestamp:';
+  statsString += obj.timestamp;
+  if (obj.names) {
+    log('Have names function');
+    names = obj.names();
+    for (var i = 0; i < names.length; ++i) {
+       statsString += '<br>';
+       statsString += names[i];
+       statsString += ':';
+       statsString += obj.stat(names[i]);
+    }
+  } else {
+    log('No names function');
+    if (obj.stat('audioOutputLevel')) {
+      statsString += "audioOutputLevel: ";
+      statsString += obj.stat('audioOutputLevel');
+      statsString += "<br>";
+    }
+  }
+  return statsString;
+}
+  
 
 // Utility to show the value of a field in a span called name+Display
 function showValue(name, value) {
@@ -183,7 +232,7 @@ Maximum bitrate
 <td><pre><span id="cameraConstraints"></span></pre>
 <td><pre><span id="addStreamConstraints"></span></pre>
 </table>
+<h2>Statistics report display</h2>
+<div id="stats">Stats will appear here.</div>
 </body>
 </html>
-
-
