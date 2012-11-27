@@ -37,7 +37,7 @@ def sanitize(key):
 def make_client_id(room, user):
   return room.key().id_or_name() + '/' + user
 
-def make_pc_config(stun_server, turn_server):
+def make_pc_config(stun_server, turn_server, ts_pwd):
   servers = []
   if stun_server:
     stun_config = 'stun:{}'.format(stun_server)
@@ -46,7 +46,7 @@ def make_pc_config(stun_server, turn_server):
   servers.append({'url':stun_config})
   if turn_server:
     turn_config = 'turn:{}'.format(turn_server)
-    servers.append({'url':turn_config, 'credential':''})
+    servers.append({'url':turn_config, 'credential':ts_pwd})
   return {'iceServers':servers}
 
 def create_channel(room, user, duration_minutes):
@@ -113,6 +113,12 @@ def make_constraints(hd_video):
     constraints['mandatory']['minAspectRatio'] = 1.777
 
   return constraints
+
+def append_url_arguments(self, link):
+  for argument in self.request.arguments():
+    if argument != 'r':
+      link += '&' + argument + '=' + self.request.get(argument)
+  return link
 
 # This database is to store the messages from the sender client when the
 # receiver client is not ready to receive the messages.
@@ -248,6 +254,7 @@ class MainPage(webapp2.RequestHandler):
     stun_server = self.request.get('ss')
     turn_server = self.request.get('ts')
     hd_video = self.request.get('hd')
+    ts_pwd = self.request.get('tp')
 
     if unittest:
       # Always create a new room for the unit tests.
@@ -256,15 +263,7 @@ class MainPage(webapp2.RequestHandler):
     if not room_key:
       room_key = generate_random(8)
       redirect = '/?r=' + room_key
-      if debug:
-        redirect += ('&debug=' + debug)
-      if turn_server:
-        redirect += ('&ts=' + turn_server)
-      if stun_server:
-        redirect += ('&ss=' + stun_server)
-      if hd_video:
-        redirect += ('&hd=' + hd_video)
- 
+      redirect = append_url_arguments(self, redirect)
       self.redirect(redirect)
       logging.info('Redirecting visitor to base URL to ' + redirect)
       return
@@ -295,17 +294,9 @@ class MainPage(webapp2.RequestHandler):
       return
 
     room_link = 'https://apprtc.appspot.com/?r=' + room_key
-    if debug:
-      room_link += ('&debug=' + debug)
-    if turn_server:
-      room_link += ('&ts=' + turn_server)
-    if stun_server:
-      room_link += ('&ss=' + stun_server)
-    if hd_video:
-      room_link += ('&hd=' + hd_video)
-
+    room_link = append_url_arguments(self, room_link)
     token = create_channel(room, user, TOKEN_TIMEOUT)
-    pc_config = make_pc_config(stun_server, turn_server)
+    pc_config = make_pc_config(stun_server, turn_server, ts_pwd)
     media_constraints = make_constraints(hd_video)
     template_values = {'token': token,
                        'token_timeout': TOKEN_TIMEOUT*60,

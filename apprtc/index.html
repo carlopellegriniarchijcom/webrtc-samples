@@ -161,8 +161,8 @@
     try {
       getUserMedia({'audio':true, 'video':constraints}, onUserMediaSuccess,
                    onUserMediaError);
-      console.log("Requested access to local media with mediaConstraints :\n" +"  \"" +
-                  JSON.stringify(constraints) + "\"");
+      console.log("Requested access to local media with mediaConstraints:\n" +
+                  "  \"" + JSON.stringify(constraints) + "\"");
     } catch (e) {
       alert("getUserMedia() failed. Is this a WebRTC capable browser?");
       console.log("getUserMedia failed with exception: " + e.message);
@@ -175,7 +175,7 @@
       // Create an RTCPeerConnection via the polyfill (adapter.js).
       pc = new RTCPeerConnection(pc_config);
       pc.onicecandidate = onIceCandidate;
-      console.log("Created RTCPeerConnnection with config \"" +
+      console.log("Created RTCPeerConnnection with config:\n" + "  \"" +
                   JSON.stringify(pc_config) + "\".");
     } catch (e) {
       console.log("Failed to create PeerConnection, exception: " + e.message);
