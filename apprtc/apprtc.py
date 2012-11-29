@@ -107,10 +107,11 @@ def make_constraints(hd_video):
     # Demo with WHD by setting size with 1280x720.
     constraints['mandatory']['minHeight'] = 720
     constraints['mandatory']['minWidth'] = 1280
-  else:
+    # Disabled for now due to weird stretching behavior on Mac. 
+    #else:
     # Demo with WVGA by setting Aspect Ration;
-    constraints['mandatory']['maxAspectRatio'] = 1.778
-    constraints['mandatory']['minAspectRatio'] = 1.777
+    #constraints['mandatory']['maxAspectRatio'] = 1.778
+    #constraints['mandatory']['minAspectRatio'] = 1.777
 
   return constraints
 
