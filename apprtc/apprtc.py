@@ -39,14 +39,14 @@ def make_client_id(room, user):
 
 def make_pc_config(stun_server, turn_server, ts_pwd):
   servers = []
+  if turn_server:
+    turn_config = 'turn:{}'.format(turn_server)
+    servers.append({'url':turn_config, 'credential':ts_pwd})
   if stun_server:
     stun_config = 'stun:{}'.format(stun_server)
   else:
     stun_config = 'stun:' + 'stun.l.google.com:19302'
   servers.append({'url':stun_config})
-  if turn_server:
-    turn_config = 'turn:{}'.format(turn_server)
-    servers.append({'url':turn_config, 'credential':ts_pwd})
   return {'iceServers':servers}
 
 def create_channel(room, user, duration_minutes):
@@ -115,10 +115,10 @@ def make_constraints(hd_video):
 
   return constraints
 
-def append_url_arguments(self, link):
-  for argument in self.request.arguments():
+def append_url_arguments(request, link):
+  for argument in request.arguments():
     if argument != 'r':
-      link += '&' + argument + '=' + self.request.get(argument)
+      link += '&' + argument + '=' + request.get(argument)
   return link
 
 # This database is to store the messages from the sender client when the
@@ -264,7 +264,7 @@ class MainPage(webapp2.RequestHandler):
     if not room_key:
       room_key = generate_random(8)
       redirect = '/?r=' + room_key
-      redirect = append_url_arguments(self, redirect)
+      redirect = append_url_arguments(self.request, redirect)
       self.redirect(redirect)
       logging.info('Redirecting visitor to base URL to ' + redirect)
       return
@@ -295,7 +295,7 @@ class MainPage(webapp2.RequestHandler):
       return
 
     room_link = 'https://apprtc.appspot.com/?r=' + room_key
-    room_link = append_url_arguments(self, room_link)
+    room_link = append_url_arguments(self.request, room_link)
     token = create_channel(room, user, TOKEN_TIMEOUT)
     pc_config = make_pc_config(stun_server, turn_server, ts_pwd)
     media_constraints = make_constraints(hd_video)
