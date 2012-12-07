@@ -2,6 +2,8 @@
 <html>
 <head>
 <title>PeerConnection Demo 1</title>
+<!-- Load the polyfill to switch-hit between Chrome and Firefox -->
+<script src="/js/adapter.js"></script>
 <style>
 video {
   border:5px solid black;
@@ -44,12 +46,13 @@ function trace(text) {
   if (text[text.length - 1] == '\n') {
     text = text.substring(0, text.length - 1);
   }
-  console.log((performance.webkitNow() / 1000).toFixed(3) + ": " + text);
+  console.log((performance.now() / 1000).toFixed(3) + ": " + text);
 }
 
 function gotStream(stream){
   trace("Received local stream");
-  vid1.src = webkitURL.createObjectURL(stream);
+  // Call the polyfill wrapper to attach the media stream to this element.
+  attachMediaStream(vid1, stream);
   localstream = stream;
   btn2.disabled = false;
 }
@@ -57,8 +60,9 @@ function gotStream(stream){
 function start() {
   trace("Requesting local stream");
   btn1.disabled = true;
-  navigator.webkitGetUserMedia({audio:true, video:true},
-                               gotStream, function() {});
+  // Call into getUserMedia via the polyfill (adapter.js).
+  getUserMedia({audio:true, video:true},
+                gotStream, function() {});
 }  
   
 function call() {
@@ -70,39 +74,55 @@ function call() {
   if (localstream.audioTracks.length > 0)
     trace("Using Audio device: " + localstream.audioTracks[0].label);
 
-  pc1_local = new webkitPeerConnection00(null, iceCallback1Local);
-  pc1_remote = new webkitPeerConnection00(null, iceCallback1Remote);
-  pc1_remote.onaddstream = gotRemoteStream1; 
+  // Create an RTCPeerConnection via the polyfill (adapter.js).
+  var servers = null;
+  pc1_local = new RTCPeerConnection(servers);
+  pc1_remote = new RTCPeerConnection(servers);
+  pc1_remote.onaddstream = gotRemoteStream1;
+  pc1_local.onicecandidate = iceCallback1Local;
+  pc1_remote.onicecandidate = iceCallback1Remote;
   trace("PC1: created local and remote peer connection objects"); 
   
-  pc2_local = new webkitPeerConnection00(null, iceCallback2Local);
-  pc2_remote = new webkitPeerConnection00(null, iceCallback2Remote);
+  pc2_local = new RTCPeerConnection(servers);
+  pc2_remote = new RTCPeerConnection(servers);
   pc2_remote.onaddstream = gotRemoteStream2;
+  pc2_local.onicecandidate = iceCallback2Local;
+  pc2_remote.onicecandidate = iceCallback2Remote;
   trace("PC2: created local and remote peer connection objects");
   
-  signal(pc1_local, pc1_remote, "PC1: ");
-  signal(pc2_local, pc2_remote, "PC2: ");
+  pc1_local.addStream(localstream);
+  trace("Adding local stream to pc1_local");
+  pc1_local.createOffer(gotDescription1Local);
+
+  pc2_local.addStream(localstream);
+  trace("Adding local stream to pc2_local");
+  pc2_local.createOffer(gotDescription2Local);
 }
 
-function signal(pc_local, pc_remote, prefix) {
-  pc_local.addStream(localstream);
-  trace(prefix + "Adding local stream to peer connection");
-  var offer = pc_local.createOffer(null);
-  trace(prefix + "Created offer:\n" + offer.toSdp());
-  pc_local.setLocalDescription(pc_local.SDP_OFFER, offer);
-  trace(prefix + "SetLocalDesc1");
-  pc_remote.setRemoteDescription(pc_remote.SDP_OFFER, offer);
-  trace(prefix + "SetRemoteDesc2");
-  var answer = pc_remote.createAnswer(offer.toSdp(),
-                                      {has_audio:true, has_video:true});
-  trace(prefix + "Created answer:\n" + answer.toSdp());
-  pc_remote.setLocalDescription(pc_remote.SDP_ANSWER, answer);
-  trace(prefix + "SetLocalDesc2");
-  pc_local.setRemoteDescription(pc_local.SDP_ANSWER, answer);
-  trace(prefix + "SetRemoteDesc1");
-  pc_local.startIce();
-  pc_remote.startIce();
-  trace(prefix + "Started ICE for both local & remote");
+function gotDescription1Local(desc) {
+  pc1_local.setLocalDescription(desc);
+  trace("Offer from pc1_local \n" + desc.sdp);
+  pc1_remote.setRemoteDescription(desc);
+  pc1_remote.createAnswer(gotDescription1Remote);
+}
+
+function gotDescription1Remote(desc) {
+  pc1_remote.setLocalDescription(desc);
+  trace("Answer from pc1_remote \n" + desc.sdp);
+  pc1_local.setRemoteDescription(desc);
+}
+
+function gotDescription2Local(desc) {
+  pc2_local.setLocalDescription(desc);
+  trace("Offer from pc2_local \n" + desc.sdp);
+  pc2_remote.setRemoteDescription(desc);
+  pc2_remote.createAnswer(gotDescription2Remote);
+}
+
+function gotDescription2Remote(desc) {
+  pc2_remote.setLocalDescription(desc);
+  trace("Answer from pc2_remote \n" + desc.sdp);
+  pc2_local.setRemoteDescription(desc);
 }
 
 function hangup() {
@@ -117,36 +137,36 @@ function hangup() {
   btn2.disabled = false;
 }
 
-function gotRemoteStream1(e){
+function gotRemoteStream1(e) {
   vid2.src = webkitURL.createObjectURL(e.stream);
   trace("PC1: Received remote stream");
 }
 
-function gotRemoteStream2(e){
+function gotRemoteStream2(e) {
   vid3.src = webkitURL.createObjectURL(e.stream);
   trace("PC2: Received remote stream");
 }
 
-function iceCallback1Local(candidate,bMore){
-  handleCandidate(candidate, pc1_remote, "PC1: ", "local");
+function iceCallback1Local(event) {
+  handleCandidate(event.candidate, pc1_remote, "PC1: ", "local");
 }
       
-function iceCallback1Remote(candidate,bMore){
-  handleCandidate(candidate, pc1_local, "PC1: ", "remote");
+function iceCallback1Remote(event) {
+  handleCandidate(event.candidate, pc1_local, "PC1: ", "remote");
 }
 
-function iceCallback2Local(candidate,bMore){
-  handleCandidate(candidate, pc2_remote, "PC2: ", "local");
+function iceCallback2Local(event) {
+  handleCandidate(event.candidate, pc2_remote, "PC2: ", "local");
 }
       
-function iceCallback2Remote(candidate,bMore){
-  handleCandidate(candidate, pc2_local, "PC2: ", "remote");
+function iceCallback2Remote(event) {
+  handleCandidate(event.candidate, pc2_local, "PC2: ", "remote");
 }
 
 function handleCandidate(candidate, dest, prefix, type) {
   if (candidate) {
-    dest.processIceMessage(candidate);
-    trace(prefix + "New " + type + " ICE candidate: " + candidate.toSdp());
+    dest.addIceCandidate(new RTCIceCandidate(candidate));
+    trace(prefix + "New " + type + " ICE candidate: " + candidate.candidate);
   }
 }
 </script>
