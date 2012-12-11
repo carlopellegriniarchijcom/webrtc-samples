@@ -33,11 +33,17 @@ function cameraConstraints() {
   var constraints = {};
   constraints.audio = true;
   constraints.video = { mandatory: {}, optional: [] };
-  if ($("width").value != "0") {
-    constraints.video.mandatory.minWidth = $("width").value;
+  if ($("minwidth").value != "0") {
+    constraints.video.mandatory.minWidth = $("minwidth").value;
   }
-  if ($("height").value != "0") {
-    constraints.video.mandatory.minHeight = $("height").value;
+  if ($("maxwidth").value != "0") {
+    constraints.video.mandatory.maxWidth = $("maxwidth").value;
+  }
+  if ($("minheight").value != "0") {
+    constraints.video.mandatory.minHeight = $("minheight").value;
+  }
+  if ($("maxheight").value != "0") {
+    constraints.video.mandatory.maxHeight = $("maxheight").value;
   }
   if ($("frameRate").value != "0") {
     constraints.video.mandatory.minFrameRate = $("frameRate").value;
@@ -138,6 +144,17 @@ var statCollector = setInterval(function() {
   } else {
     log('Not connected yet');
   }
+  // Collect some stats from the video tags.
+  local_video = $('local-video');
+  if (local_video) {
+     $('local-video-stats').innerHTML = local_video.videoWidth +
+         'x' + local_video.videoHeight;
+  }
+  remote_video = $('remote-video');
+  if (remote_video) {
+     $('remote-video-stats').innerHTML = remote_video.videoWidth +
+         'x' + remote_video.videoHeight;
+  }
 }, 1000);
 
 // Dumping a stats variable as a string.
@@ -189,21 +206,26 @@ the video feed uses for transmission.
 <tr>
 <td align="top">
 <h2>getUserMedia constraints</h2>
-Min horizontal size
-<input type="range" id="width" min="0" max="1280" value="640"
+<table>
+<tr><td><td>Min<td>Max
+<tr><td>Horizontal
+<td><input type="range" id="minwidth" min="0" max="1280" value="300"
   onchange="showValue(this.id, this.value)">
-<span id="widthDisplay">640</span>
-<br>
-Min vertical size
-<input type="range" id="height" min="0" max="1280" value="480"
+<td><input type="range" id="maxwidth" min="0" max="1280" value="640"
   onchange="showValue(this.id, this.value)">
-<span id="heightDisplay">480</span>
-<br>
+<td><span id="minwidthDisplay">300</span>-<span id="maxwidthDisplay">640</span>
+<tr><td>Vertical
+<td><input type="range" id="minheight" min="0" max="1280" value="200"
+  onchange="showValue(this.id, this.value)">
+<td><input type="range" id="maxheight" min="0" max="1280" value="480"
+  onchange="showValue(this.id, this.value)">
+<td><span id="minheightDisplay">200</span>-<span id="maxheightDisplay">480</span>
+<tr><td>
 FrameRate
-<input type="range" id="frameRate" min="0" max="60" value="30"
+<td colspan=2><input type="range" id="frameRate" min="0" max="60" value="30"
   onchange="showValue(this.id, this.value)">
-<span id="frameRateDisplay">30</span>
-<br>
+<td><span id="frameRateDisplay">30</span>
+</table>
 <input type="submit" name="capture" value="Capture!" onclick="openCamera()">
 </td>
 <td align="top">
@@ -224,7 +246,9 @@ Maximum bitrate
 <video id="remote-video" autoplay width=400></video>
 </td>
 <tr>
-<td><td>
+<td><span id="local-video-stats"></span>
+<td><span id="remote-video-stats"></span>
+<br>
 <span id="bitrate">Bitrate unknown</span>
 </td>
 </tr>
