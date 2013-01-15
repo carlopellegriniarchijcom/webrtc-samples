@@ -17,13 +17,17 @@ import re
 import json
 import jinja2
 import webapp2
+import threading
 from google.appengine.api import channel
 from google.appengine.ext import db
 
 jinja_environment = jinja2.Environment(
     loader=jinja2.FileSystemLoader(os.path.dirname(__file__)))
-# Set the channel token expiration to 30 min, instead 120 min by default.
-TOKEN_TIMEOUT = 30
+
+# Lock for syncing DB operation in concurrent requests handling.
+# TODO(brave): keeping working on improving performance with thread syncing. 
+# One possible method for near future is to reduce the message caching.
+LOCK = threading.RLock()
 
 def generate_random(len):
   word = ''
@@ -57,12 +61,6 @@ def handle_message(room, user, message):
   message_obj = json.loads(message)
   other_user = room.get_other_user(user)
   room_key = room.key().id_or_name();
-  if message_obj['type'] == 'tokenRequest':
-    token = create_channel(room, user, TOKEN_TIMEOUT)
-    channel.send_message(make_client_id(room, user),
-                         json.dumps({"type":"tokenResponse", "token": token}))
-    return
-
   if message_obj['type'] == 'bye':
     room.remove_user(user)
     logging.info('User ' + user + ' quit from room ' + room_key)
@@ -96,7 +94,7 @@ def on_message(room, user, message):
     channel.send_message(client_id, message)
     logging.info('Delivered message to user ' + user);
   else:
-    new_message = Message(id = client_id, msg = message)
+    new_message = Message(client_id = client_id, msg = message)
     new_message.put()
     logging.info('Saved message for user ' + user)
 
@@ -126,7 +124,7 @@ def append_url_arguments(request, link):
 # Use TextProperty instead of StringProperty for msg because
 # the session description can be more than 500 characters.
 class Message(db.Model):
-  token = db.StringProperty()
+  client_id = db.StringProperty()
   msg = db.TextProperty()
 
 class Room(db.Model):
@@ -141,7 +139,7 @@ class Room(db.Model):
     if self.user1:
       str += "%s-%r" % (self.user1, self.user1_connected)
     if self.user2:
-      str += "%s-%r" % (self.user2, self.user2_connected)
+      str += ", %s-%r" % (self.user2, self.user2_connected)
     str += ']'
     return str
 
@@ -177,12 +175,16 @@ class Room(db.Model):
     delete_saved_messages(make_client_id(self, user))
     if user == self.user2:
       self.user2 = None
+      self.user2_connected = False
     if user == self.user1:
       if self.user2:
         self.user1 = self.user2
+        self.user1_connected = self.user2_connected
         self.user2 = None
+        self.user2_connected = False
       else:
         self.user1 = None
+        self.user1_connected = False
     if self.get_occupancy() > 0:
       self.put()
     else:
@@ -205,30 +207,33 @@ class ConnectPage(webapp2.RequestHandler):
   def post(self):
     key = self.request.get('from')
     room_key, user = key.split('/')
-    room = Room.get_by_key_name(room_key)
-    # Check if room has user in case that disconnect message comes before
-    # connect message with unknown reason, observed with local AppEngine SDK.
-    if room and room.has_user(user):
-      room.set_connected(user)
-      send_saved_messages(make_client_id(room, user))
-      logging.info('User ' + user + ' connected to room ' + room_key)
-    else:
-      logging.warning('Unexpected Connect Message to room ' + room_key)
+    with LOCK:
+      room = Room.get_by_key_name(room_key)
+      # Check if room has user in case that disconnect message comes before
+      # connect message with unknown reason, observed with local AppEngine SDK.
+      if room and room.has_user(user):
+        room.set_connected(user)
+        send_saved_messages(make_client_id(room, user))
+        logging.info('User ' + user + ' connected to room ' + room_key)
+        logging.info('Room ' + room_key + ' has state ' + str(room))
+      else:
+        logging.warning('Unexpected Connect Message to room ' + room_key)
 
 
 class DisconnectPage(webapp2.RequestHandler):
   def post(self):
     key = self.request.get('from')
     room_key, user = key.split('/')
-    room = Room.get_by_key_name(room_key)
-    if room and room.has_user(user):
-      other_user = room.get_other_user(user)
-      room.remove_user(user)
-      logging.info('User ' + user + ' removed from room ' + room_key)
-      logging.info('Room ' + room_key + ' has state ' + str(room))
-      if other_user:
-        channel.send_message(make_client_id(room, other_user), '{"type":"bye"}')
-        logging.info('Sent BYE to ' + other_user)
+    with LOCK:
+      room = Room.get_by_key_name(room_key)
+      if room and room.has_user(user):
+        other_user = room.get_other_user(user)
+        room.remove_user(user)
+        logging.info('User ' + user + ' removed from room ' + room_key)
+        logging.info('Room ' + room_key + ' has state ' + str(room))
+        if other_user and other_user != user:
+          channel.send_message(make_client_id(room, other_user), '{"type":"bye"}')
+          logging.info('Sent BYE to ' + other_user)
     logging.warning('User ' + user + ' disconnected from room ' + room_key)
 
 
@@ -237,11 +242,12 @@ class MessagePage(webapp2.RequestHandler):
     message = self.request.body
     room_key = self.request.get('r')
     user = self.request.get('u')
-    room = Room.get_by_key_name(room_key)
-    if room:
-      handle_message(room, user, message)
-    else:
-      logging.warning('Unknown room ' + room_key)
+    with LOCK:
+      room = Room.get_by_key_name(room_key)
+      if room:
+        handle_message(room, user, message)
+      else:
+        logging.warning('Unknown room ' + room_key)
 
 class MainPage(webapp2.RequestHandler):
   """The main UI page, renders the 'index.html' template."""
@@ -256,6 +262,11 @@ class MainPage(webapp2.RequestHandler):
     turn_server = self.request.get('ts')
     hd_video = self.request.get('hd')
     ts_pwd = self.request.get('tp')
+    # token_timeout for channel creation, default 30min, max 2 days, min 3min.
+    token_timeout = self.request.get_range('tt',
+                                           min_value = 3,
+                                           max_value = 3000,
+                                           default = 30)
 
     if unittest:
       # Always create a new room for the unit tests.
@@ -271,36 +282,36 @@ class MainPage(webapp2.RequestHandler):
 
     user = None
     initiator = 0
-    room = Room.get_by_key_name(room_key)
-    if not room and debug != "full":
-      # New room.
-      user = generate_random(8)
-      room = Room(key_name = room_key)
-      room.add_user(user)
-      if debug != 'loopback':
-        initiator = 0
-      else:
+    with LOCK:
+      room = Room.get_by_key_name(room_key)
+      if not room and debug != "full":
+        # New room.
+        user = generate_random(8)
+        room = Room(key_name = room_key)
+        room.add_user(user)
+        if debug != 'loopback':
+          initiator = 0
+        else:
+          room.add_user(user)
+          initiator = 1
+      elif room and room.get_occupancy() == 1 and debug != 'full':
+        # 1 occupant.
+        user = generate_random(8)
         room.add_user(user)
         initiator = 1
-    elif room and room.get_occupancy() == 1 and debug != 'full':
-      # 1 occupant.
-      user = generate_random(8)
-      room.add_user(user)
-      initiator = 1
-    else:
-      # 2 occupants (full).
-      template = jinja_environment.get_template('full.html')
-      self.response.out.write(template.render({ 'room_key': room_key }))
-      logging.info('Room ' + room_key + ' is full')
-      return
+      else:
+        # 2 occupants (full).
+        template = jinja_environment.get_template('full.html')
+        self.response.out.write(template.render({ 'room_key': room_key }))
+        logging.info('Room ' + room_key + ' is full')
+        return
 
     room_link = 'https://apprtc.appspot.com/?r=' + room_key
     room_link = append_url_arguments(self.request, room_link)
-    token = create_channel(room, user, TOKEN_TIMEOUT)
+    token = create_channel(room, user, token_timeout)
     pc_config = make_pc_config(stun_server, turn_server, ts_pwd)
     media_constraints = make_constraints(hd_video)
     template_values = {'token': token,
-                       'token_timeout': TOKEN_TIMEOUT*60,
                        'me': user,
                        'room_key': room_key,
                        'room_link': room_link,

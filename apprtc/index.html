@@ -111,7 +111,6 @@
   var remoteStream;
   var channel;
   var channelReady = false;
-  var channelRefreshTimer;
   var pc;
   var socket;
   var initiator = {{ initiator }};
@@ -131,7 +130,6 @@
     remoteVideo = document.getElementById("remoteVideo");
     resetStatus();
     openChannel('{{ token }}');
-    startTokenRefresh();
     doGetUserMedia();
   }
 
@@ -251,8 +249,6 @@
       pc.addIceCandidate(candidate);
     } else if (msg.type === 'bye' && started) {
       onRemoteHangup();
-    } else if (msg.type === 'tokenResponse') {
-      reopenChannel(msg.token);
     }
   }
 
@@ -323,7 +319,6 @@
     stop();
     // will trigger BYE from server
     socket.close();
-    stopTokenRefresh();
   }
    
   function onRemoteHangup() {
@@ -423,8 +418,6 @@
   // to ensure the room is cleaned for next session.
   window.onbeforeunload = function() {
     sendMessage({type: 'bye'});
-    //Delay 100ms to ensure 'bye' arrives first.
-    setTimeout(function(){}, 100);
   }
 
   // Ctrl-D: toggle audio mute; Ctrl-E: toggle video mute.
@@ -450,25 +443,6 @@
         return false;
       }
     }
-  }
-
-  // Refresh the channel token periodically before it expires.
-  function reopenChannel(channelToken) {
-    socket.close();
-    openChannel(channelToken);
-  }
-
-  function startTokenRefresh() {
-    var interval = {{ token_timeout }};
-    // Make sure the refresh timer is 10 sec less than token timeout.
-    interval = (interval -10 ) > 0 ? interval - 10: interval;
-    channelRefreshTimer = setInterval(function() {
-      sendMessage({type: 'tokenRequest'})}, interval * 1000);
-  }
-
-  function stopTokenRefresh() {
-    if (channelRefreshTimer)
-      clearInterval(channelRefreshTimer);
   }
 
   // Set Opus as the default audio codec if it's present.
