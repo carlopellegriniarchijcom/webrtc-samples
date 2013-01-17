@@ -69,10 +69,12 @@ function call() {
   btn2.disabled = true;
   btn3.disabled = false;
   trace("Starting calls");
-  if (localstream.videoTracks.length > 0)
-    trace("Using Video device: " + localstream.videoTracks[0].label);  
-  if (localstream.audioTracks.length > 0)
-    trace("Using Audio device: " + localstream.audioTracks[0].label);
+  videoTracks = localstream.getVideoTracks();
+  audioTracks = localstream.getAudioTracks();
+  if (videoTracks.length > 0)
+    trace("Using Video device: " + videoTracks[0].label);  
+  if (audioTracks.length > 0)
+    trace("Using Audio device: " + audioTracks[0].label);
 
   // Create an RTCPeerConnection via the polyfill (adapter.js).
   var servers = null;

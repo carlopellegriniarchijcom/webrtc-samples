@@ -28,9 +28,11 @@
   }
   
   function gotStream(stream) {
-    if (stream.audioTracks.length == 1 && stream.videoTracks.length == 0) {
+    videoTracks = stream.getVideoTracks();
+    audioTracks = stream.getAudioTracks();
+    if (audioTracks.length == 1 && videoTracks.length == 0) {
       console.log('gotStream({audio:true, video:false})');
-      console.log('Using audio device: ' + stream.audioTracks[0].label);
+      console.log('Using audio device: ' + audioTracks[0].label);
       attachMediaStream(audioElement, stream);
       
       // The audio will be muted by default from start.

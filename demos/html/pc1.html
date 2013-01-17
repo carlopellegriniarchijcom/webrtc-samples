@@ -2,6 +2,8 @@
 <html>
 <head>
 <title>PeerConnection Demo 1</title>
+<!-- Load the polyfill to switch-hit between Chrome and Firefox -->
+<script src="/js/adapter.js"></script>
 <style>
 video {
   border:5px solid black;
@@ -49,7 +51,8 @@ function trace(text) {
 
 function gotStream(stream){
   trace("Received local stream");
-  vid1.src = webkitURL.createObjectURL(stream);
+  // Call the polyfill wrapper to attach the media stream to this element.
+  attachMediaStream(vid1, stream);
   localstream = stream;
   btn2.disabled = false;
 }
@@ -57,23 +60,26 @@ function gotStream(stream){
 function start() {
   trace("Requesting local stream");
   btn1.disabled = true;
-  navigator.webkitGetUserMedia({audio:true, video:true},
-                               gotStream, function() {});
+  // Call into getUserMedia via the polyfill (adapter.js).
+  getUserMedia({audio:true, video:true},
+                gotStream, function() {});
 }  
   
 function call() {
   btn2.disabled = true;
   btn3.disabled = false;
   trace("Starting call");
-  if (localstream.videoTracks.length > 0)
-    trace('Using Video device: ' + localstream.videoTracks[0].label);  
-  if (localstream.audioTracks.length > 0)
-    trace('Using Audio device: ' + localstream.audioTracks[0].label);
+  videoTracks = localstream.getVideoTracks();
+  audioTracks = localstream.getAudioTracks();
+  if (videoTracks.length > 0)
+    trace('Using Video device: ' + videoTracks[0].label);  
+  if (audioTracks.length > 0)
+    trace('Using Audio device: ' + audioTracks[0].label);
   var servers = null;
-  pc1 = new webkitRTCPeerConnection(servers);
+  pc1 = new RTCPeerConnection(servers);
   trace("Created local peer connection object pc1");
   pc1.onicecandidate = iceCallback1; 
-  pc2 = new webkitRTCPeerConnection(servers);
+  pc2 = new RTCPeerConnection(servers);
   trace("Created remote peer connection object pc2");
   pc2.onicecandidate = iceCallback2;
   pc2.onaddstream = gotRemoteStream; 
