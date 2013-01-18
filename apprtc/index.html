@@ -337,7 +337,9 @@
   }
 
   function waitForRemoteVideo() {
-    if (remoteStream.videoTracks.length === 0 || remoteVideo.currentTime > 0) {
+    // Call the getVideoTracks method via adapter.js.
+    videoTracks = remoteStream.getVideoTracks();
+    if (videoTracks.length === 0 || remoteVideo.currentTime > 0) {
       transitionToActive();
     } else {
       setTimeout(waitForRemoteVideo, 100);
@@ -371,19 +373,22 @@
   }
 
   function toggleVideoMute() {
-    if (localStream.videoTracks.length === 0) {
+    // Call the getVideoTracks method via adapter.js.
+    videoTracks = localStream.getVideoTracks();
+
+    if (videoTracks.length === 0) {
       console.log("No local video available.");
       return;
     }
 
     if (isVideoMuted) {
-      for (i = 0; i < localStream.videoTracks.length; i++) {
-        localStream.videoTracks[i].enabled = true;
+      for (i = 0; i < videoTracks.length; i++) {
+        videoTracks[i].enabled = true;
       }
       console.log("Video unmuted.");
     } else {
-      for (i = 0; i < localStream.videoTracks.length; i++) {
-        localStream.videoTracks[i].enabled = false;
+      for (i = 0; i < videoTracks.length; i++) {
+        videoTracks[i].enabled = false;
       }
       console.log("Video muted.");
     }
@@ -392,19 +397,22 @@
   }
 
   function toggleAudioMute() {
-    if (localStream.audioTracks.length === 0) {
+    // Call the getAudioTracks method via adapter.js.
+    audioTracks = localStream.getAudioTracks();
+
+    if (audioTracks.length === 0) {
       console.log("No local audio available.");
       return;
     }
 
     if (isAudioMuted) {
-      for (i = 0; i < localStream.audioTracks.length; i++) {
-        localStream.audioTracks[i].enabled = true;
+      for (i = 0; i < audioTracks.length; i++) {
+        audioTracks[i].enabled = true;
       }
       console.log("Audio unmuted.");
     } else {
-      for (i = 0; i < localStream.audioTracks.length; i++){
-        localStream.audioTracks[i].enabled = false;
+      for (i = 0; i < audioTracks.length; i++){
+        audioTracks[i].enabled = false;
       }
       console.log("Audio muted.");
     }

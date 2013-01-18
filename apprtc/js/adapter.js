@@ -32,6 +32,19 @@ if (navigator.mozGetUserMedia) {
   attachMediaStream = function(element, stream) {
     element.src = webkitURL.createObjectURL(stream);
   };
+
+  // The representation of tracks in a stream is changed in M26.
+  // Unify them for earlier Chrome versions in the coexisting period.
+  if (!webkitMediaStream.prototype.getVideoTracks) {
+    webkitMediaStream.prototype.getVideoTracks = function() {
+      return this.videoTracks;
+    }
+  }
+  if (!webkitMediaStream.prototype.getAudioTracks) {
+    webkitMediaStream.prototype.getAudioTracks = function() {
+      return this.audioTracks;
+    }
+  }
 } else {
   console.log("Browser does not appear to be WebRTC-capable");
 }
