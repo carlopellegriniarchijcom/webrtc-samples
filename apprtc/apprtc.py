@@ -98,7 +98,7 @@ def on_message(room, user, message):
     new_message.put()
     logging.info('Saved message for user ' + user)
 
-def make_constraints(hd_video):
+def make_media_constraints(hd_video):
   constraints = { 'optional': [], 'mandatory': {} }
   # Demo 16:9 video with media constraints.
   if hd_video.lower() == 'true':
@@ -110,7 +110,14 @@ def make_constraints(hd_video):
     # Demo with WVGA by setting Aspect Ration;
     #constraints['mandatory']['maxAspectRatio'] = 1.778
     #constraints['mandatory']['minAspectRatio'] = 1.777
+  return constraints
 
+def make_pc_constraints(compat):
+  constraints = { 'optional': []}
+  # For interop with FireFox. Enable DTLS and disable Data Channel.
+  if compat.lower() == 'true':
+    constraints['optional'].append({'DtlsSrtpKeyAgreement': 'true'})
+    constraints['optional'].append({'MozDontOfferDataChannel': 'true'})
   return constraints
 
 def append_url_arguments(request, link):
@@ -262,6 +269,8 @@ class MainPage(webapp2.RequestHandler):
     turn_server = self.request.get('ts')
     hd_video = self.request.get('hd')
     ts_pwd = self.request.get('tp')
+    compat = self.request.get('compat')
+
     # token_timeout for channel creation, default 30min, max 2 days, min 3min.
     token_timeout = self.request.get_range('tt',
                                            min_value = 3,
@@ -310,13 +319,15 @@ class MainPage(webapp2.RequestHandler):
     room_link = append_url_arguments(self.request, room_link)
     token = create_channel(room, user, token_timeout)
     pc_config = make_pc_config(stun_server, turn_server, ts_pwd)
-    media_constraints = make_constraints(hd_video)
+    pc_constraints = make_pc_constraints(compat)
+    media_constraints = make_media_constraints(hd_video)
     template_values = {'token': token,
                        'me': user,
                        'room_key': room_key,
                        'room_link': room_link,
                        'initiator': initiator,
                        'pc_config': json.dumps(pc_config),
+                       'pc_constraints': json.dumps(pc_constraints),
                        'media_constraints': json.dumps(media_constraints)
                       }
     if unittest:

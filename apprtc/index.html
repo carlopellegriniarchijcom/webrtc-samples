@@ -169,12 +169,14 @@
 
   function createPeerConnection() {
     var pc_config = {{ pc_config|safe }};
+    var pc_constraints = {{ pc_constraints|safe }};
     try {
       // Create an RTCPeerConnection via the polyfill (adapter.js).
-      pc = new RTCPeerConnection(pc_config);
+      pc = new RTCPeerConnection(pc_config, pc_constraints);
       pc.onicecandidate = onIceCandidate;
-      console.log("Created RTCPeerConnnection with config:\n" + "  \"" +
-                  JSON.stringify(pc_config) + "\".");
+      console.log("Created RTCPeerConnnection with:\n" + 
+                  "  config: \"" + JSON.stringify(pc_config) + "\";\n" + 
+                  "  constraints: \"" + JSON.stringify(pc_constraints) + "\".");
     } catch (e) {
       console.log("Failed to create PeerConnection, exception: " + e.message);
       alert("Cannot create RTCPeerConnection object; WebRTC is not supported by this browser.");
