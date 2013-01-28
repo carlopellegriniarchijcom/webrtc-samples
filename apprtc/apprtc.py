@@ -65,7 +65,7 @@ def make_loopback_answer(message):
 def maybe_add_fake_crypto(message):
   if message.find("a=crypto") == -1:
     index = len(message)
-    crypto_line = "a=crypto:1 AES_CM_128_HMAC_SHA1_80 inline: fakekey\\r\\n"
+    crypto_line = "a=crypto:1 AES_CM_128_HMAC_SHA1_80 inline:BAADBAADBAADBAADBAADBAADBAADBAADBAADBAAD\\r\\n"
     # reverse find for multiple find and insert operations.
     index = message.rfind("c=IN", 0, index) 
     while (index != -1):          
@@ -145,7 +145,7 @@ def make_offer_constraints(compat):
   constraints = { 'optional': []}
   # For interop with FireFox. Disable Data Channel in createOffer.
   if compat.lower() == 'true':
-    constraints['optional'].append({'MozDontOfferDataChannel': 'true'})
+    mediaConstraints.mandatory['MozDontOfferDataChannel'] = true;
   return constraints
 
 def append_url_arguments(request, link):
