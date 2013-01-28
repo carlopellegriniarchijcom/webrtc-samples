@@ -57,19 +57,41 @@ def create_channel(room, user, duration_minutes):
   client_id = make_client_id(room, user)
   return channel.create_channel(client_id, duration_minutes)
 
+def make_loopback_answer(message):
+  message = message.replace("\"offer\"", "\"answer\"")
+  message = message.replace("a=ice-options:google-ice\\r\\n", "")
+  return message
+
+def maybe_add_fake_crypto(message):
+  if message.find("a=crypto") == -1:
+    index = len(message)
+    crypto_line = "a=crypto:1 AES_CM_128_HMAC_SHA1_80 inline: fakekey\\r\\n"
+    # reverse find for multiple find and insert operations.
+    index = message.rfind("c=IN", 0, index) 
+    while (index != -1):          
+      message = message[:index] + crypto_line + message[index:]
+      index = message.rfind("c=IN", 0, index) 
+  return message
+
 def handle_message(room, user, message):
   message_obj = json.loads(message)
   other_user = room.get_other_user(user)
   room_key = room.key().id_or_name();
   if message_obj['type'] == 'bye':
+    # This would remove the other_user in loopback test too.
+    # So check its availability before forwarding Bye message.
     room.remove_user(user)
     logging.info('User ' + user + ' quit from room ' + room_key)
     logging.info('Room ' + room_key + ' has state ' + str(room))
-  if other_user:
-    # special case the loopback scenario
-    if message_obj['type'] == 'offer' and other_user == user:
-      message = message.replace("\"offer\"", "\"answer\"")
-      message = message.replace("a=ice-options:google-ice\\r\\n", "")
+  if other_user and room.has_user(other_user):
+    if message_obj['type'] == 'offer':
+      # Special case the loopback scenario.
+      if other_user == user:
+        message = make_loopback_answer(message)
+      # Workaround Chrome bug. 
+      # Insert a=crypto line into offer from FireFox.
+      # TODO(juberti): Remove this call.
+      message = maybe_add_fake_crypto(message)
     on_message(room, other_user, message)
 
 def get_saved_messages(client_id):
@@ -114,9 +136,15 @@ def make_media_constraints(hd_video):
 
 def make_pc_constraints(compat):
   constraints = { 'optional': []}
-  # For interop with FireFox. Enable DTLS and disable Data Channel.
+  # For interop with FireFox. Enable DTLS in peerConnection ctor.
   if compat.lower() == 'true':
     constraints['optional'].append({'DtlsSrtpKeyAgreement': 'true'})
+  return constraints
+
+def make_offer_constraints(compat):
+  constraints = { 'optional': []}
+  # For interop with FireFox. Disable Data Channel in createOffer.
+  if compat.lower() == 'true':
     constraints['optional'].append({'MozDontOfferDataChannel': 'true'})
   return constraints
 
@@ -320,6 +348,7 @@ class MainPage(webapp2.RequestHandler):
     token = create_channel(room, user, token_timeout)
     pc_config = make_pc_config(stun_server, turn_server, ts_pwd)
     pc_constraints = make_pc_constraints(compat)
+    offer_constraints = make_offer_constraints(compat)
     media_constraints = make_media_constraints(hd_video)
     template_values = {'token': token,
                        'me': user,
@@ -328,6 +357,7 @@ class MainPage(webapp2.RequestHandler):
                        'initiator': initiator,
                        'pc_config': json.dumps(pc_config),
                        'pc_constraints': json.dumps(pc_constraints),
+                       'offer_constraints': json.dumps(offer_constraints),
                        'media_constraints': json.dumps(media_constraints)
                       }
     if unittest:
