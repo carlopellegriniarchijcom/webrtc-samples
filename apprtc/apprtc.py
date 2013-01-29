@@ -135,17 +135,17 @@ def make_media_constraints(hd_video):
   return constraints
 
 def make_pc_constraints(compat):
-  constraints = { 'optional': []}
+  constraints = { 'optional': [] }
   # For interop with FireFox. Enable DTLS in peerConnection ctor.
   if compat.lower() == 'true':
-    constraints['optional'].append({'DtlsSrtpKeyAgreement': 'true'})
+    constraints['optional'].append({'DtlsSrtpKeyAgreement': True})
   return constraints
 
 def make_offer_constraints(compat):
-  constraints = { 'optional': []}
+  constraints = { 'mandatory': {}, 'optional': [] }
   # For interop with FireFox. Disable Data Channel in createOffer.
   if compat.lower() == 'true':
-    mediaConstraints.mandatory['MozDontOfferDataChannel'] = true;
+    constraints['mandatory']['MozDontOfferDataChannel'] = True
   return constraints
 
 def append_url_arguments(request, link):
