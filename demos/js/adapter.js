@@ -1,12 +1,22 @@
 var RTCPeerConnection = null;
 var getUserMedia = null;
 var attachMediaStream = null;
+var reattachMediaStream = null;
+var webrtcDetectedBrowser = null;
 
 if (navigator.mozGetUserMedia) {
   console.log("This appears to be Firefox");
 
+  webrtcDetectedBrowser = "firefox";
+
   // The RTCPeerConnection object.
   RTCPeerConnection = mozRTCPeerConnection;
+
+  // The RTCSessionDescription object.
+  RTCSessionDescription = mozRTCSessionDescription;
+
+  // The RTCIceCandidate object.
+  RTCIceCandidate = mozRTCIceCandidate;
 
   // Get UserMedia (only difference is the prefix).
   // Code from Adam Barth.
@@ -18,8 +28,25 @@ if (navigator.mozGetUserMedia) {
     element.mozSrcObject = stream;
     element.play();
   };
+
+  reattachMediaStream = function(to, from) {
+    console.log("Reattaching media stream");
+    to.mozSrcObject = from.mozSrcObject;
+    to.play();
+  };
+
+  // Fake get{Video,Audio}Tracks
+  MediaStream.prototype.getVideoTracks = function() {
+    return [];
+  };
+
+  MediaStream.prototype.getAudioTracks = function() {
+    return [];
+  };
 } else if (navigator.webkitGetUserMedia) {
   console.log("This appears to be Chrome");
+
+  webrtcDetectedBrowser = "chrome";
 
   // The RTCPeerConnection object.
   RTCPeerConnection = webkitRTCPeerConnection;
@@ -33,19 +60,23 @@ if (navigator.mozGetUserMedia) {
     element.src = webkitURL.createObjectURL(stream);
   };
 
+  reattachMediaStream = function(to, from) {
+    to.src = from.src;
+  };
+
   // The representation of tracks in a stream is changed in M26.
   // Unify them for earlier Chrome versions in the coexisting period.
   if (!webkitMediaStream.prototype.getVideoTracks) {
-      webkitMediaStream.prototype.getVideoTracks = function() {
+    webkitMediaStream.prototype.getVideoTracks = function() {
       return this.videoTracks;
-    } 
-  } 
-  
+    };
+  }
+
   if (!webkitMediaStream.prototype.getAudioTracks) {
-      webkitMediaStream.prototype.getAudioTracks = function() {
+    webkitMediaStream.prototype.getAudioTracks = function() {
       return this.audioTracks;
-    }
-  } 
+    };
+  }
 } else {
   console.log("Browser does not appear to be WebRTC-capable");
 }
