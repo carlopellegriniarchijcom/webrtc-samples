@@ -301,7 +301,7 @@ class MainPage(webapp2.RequestHandler):
     compat = 'true'
     if self.request.get('compat'):
       compat = self.request.get('compat')
-    if debug == 'loopback'
+    if debug == 'loopback':
     # set compat to false as DTLS does not work for loopback.
       compat = 'false'
 
