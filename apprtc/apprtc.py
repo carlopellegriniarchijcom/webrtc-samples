@@ -297,7 +297,14 @@ class MainPage(webapp2.RequestHandler):
     turn_server = self.request.get('ts')
     hd_video = self.request.get('hd')
     ts_pwd = self.request.get('tp')
-    compat = self.request.get('compat')
+    # set compat to true by default.
+    compat = 'true'
+    if self.request.get('compat'):
+      compat = self.request.get('compat')
+    if debug == 'loopback'
+    # set compat to false as DTLS does not work for loopback.
+      compat = 'false'
+
 
     # token_timeout for channel creation, default 30min, max 2 days, min 3min.
     token_timeout = self.request.get_range('tt',
