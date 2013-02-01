@@ -70,11 +70,18 @@ if (navigator.mozGetUserMedia) {
     webkitMediaStream.prototype.getVideoTracks = function() {
       return this.videoTracks;
     };
-  }
-
-  if (!webkitMediaStream.prototype.getAudioTracks) {
     webkitMediaStream.prototype.getAudioTracks = function() {
       return this.audioTracks;
+    };
+  }
+
+  // New syntax of getXXXStreams method in M26.
+  if (!webkitRTCPeerConnection.prototype.getLocalStreams) {
+    webkitRTCPeerConnection.prototype.getLocalStreams = function() {
+      return this.localStreams;
+    };
+    webkitRTCPeerConnection.prototype.getRemoteStreams = function() {
+      return this.remoteStreams;
     };
   }
 } else {
