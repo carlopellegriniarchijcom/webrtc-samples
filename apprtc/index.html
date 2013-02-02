@@ -117,9 +117,9 @@
   var initiator = {{ initiator }};
   var started = false;
   // Set up audio and video regardless of what devices are present.
-  var mediaConstraints = {'mandatory': {
-                            'OfferToReceiveAudio':true, 
-                            'OfferToReceiveVideo':true }};
+  var sdpConstraints = {'mandatory': {
+                          'OfferToReceiveAudio':true, 
+                          'OfferToReceiveVideo':true }};
   var isVideoMuted = false;
   var isAudioMuted = false;
 
@@ -171,6 +171,10 @@
   function createPeerConnection() {
     var pc_config = {{ pc_config|safe }};
     var pc_constraints = {{ pc_constraints|safe }};
+    // Force the use of a number IP STUN server for Firefox.
+    if (webrtcDetectedBrowser == "firefox") {
+      pc_config = {"iceServers":[{"url":"stun:23.21.150.121"}]};
+    }    
     try {
       // Create an RTCPeerConnection via the polyfill (adapter.js).
       pc = new RTCPeerConnection(pc_config, pc_constraints);
@@ -184,8 +188,6 @@
         return;
     }
 
-    pc.onconnecting = onSessionConnecting;
-    pc.onopen = onSessionOpened;
     pc.onaddstream = onRemoteStreamAdded;
     pc.onremovestream = onRemoteStreamRemoved;
   }
@@ -209,13 +211,25 @@
   }
 
   function doCall() {
-    console.log("Sending offer to peer.");
-    pc.createOffer(setLocalAndSendMessage, null, mediaConstraints);
+    var constraints = {{ offer_constraints | safe }};
+    constraints = mergeConstraints(constraints, sdpConstraints);
+    console.log("Sending offer to peer, with constraints: \n" +
+                "  \"" + JSON.stringify(constraints) + "\".")
+    pc.createOffer(setLocalAndSendMessage, null, constraints);
   }
 
   function doAnswer() {
     console.log("Sending answer to peer.");
-    pc.createAnswer(setLocalAndSendMessage, null, mediaConstraints);
+    pc.createAnswer(setLocalAndSendMessage, null, sdpConstraints);
+  }
+
+  function mergeConstraints(cons1, cons2) {
+    var merged = cons1;
+    for (var name in cons2.mandatory) {
+      merged.mandatory[name] = cons2.mandatory[name];
+    }
+    merged.optional.concat(cons2.optional);
+    return merged;
   }
 
   function setLocalAndSendMessage(sessionDescription) {
@@ -297,17 +311,9 @@
     }
   }
 
-  function onSessionConnecting(message) {
-    console.log("Session connecting.");
-  }
-  function onSessionOpened(message) {
-    console.log("Session opened.");
-  }
-
   function onRemoteStreamAdded(event) {
-    console.log("Remote stream added.");
-    // TODO(ekr@rtfm.com): Copy the minivideo on Firefox
-    miniVideo.src = localVideo.src;
+    console.log("Remote stream added."); 
+    reattachMediaStream(miniVideo, localVideo);
     attachMediaStream(remoteVideo, event.stream);
     remoteStream = event.stream;
     waitForRemoteVideo();  
@@ -530,13 +536,13 @@
 <div id="container" ondblclick="enterFullScreen()"> 
   <div id="card">
     <div id="local">
-      <video width="100%" height="100%" id="localVideo" autoplay="autoplay"/>
+      <video width="100%" height="100%" id="localVideo" autoplay="autoplay" muted="true"/>
     </div>
     <div id="remote">
       <video width="100%" height="100%" id="remoteVideo" autoplay="autoplay">
       </video>
       <div id="mini">
-        <video width="100%" height="100%" id="miniVideo" autoplay="autoplay" />
+        <video width="100%" height="100%" id="miniVideo" autoplay="autoplay" muted="true"/>
       </div>
     </div>
   </div>
