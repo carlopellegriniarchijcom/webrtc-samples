@@ -9,6 +9,7 @@
 This module demonstrates the WebRTC API by implementing a simple video chat app.
 """
 
+import cgi
 import datetime
 import logging
 import os
@@ -151,7 +152,8 @@ def make_offer_constraints(compat):
 def append_url_arguments(request, link):
   for argument in request.arguments():
     if argument != 'r':
-      link += '&' + argument + '=' + request.get(argument)
+      link += ('&' + cgi.escape(argument, True) + '=' +
+                cgi.escape(request.get(argument), True))
   return link
 
 # This database is to store the messages from the sender client when the
@@ -290,6 +292,8 @@ class MainPage(webapp2.RequestHandler):
   def get(self):
     """Renders the main page. When this page is shown, we create a new
     channel to push asynchronous updates to the client."""
+    # get the base url without arguments.
+    base_url = self.request.path_url
     room_key = sanitize(self.request.get('r'))
     debug = self.request.get('debug')
     unittest = self.request.get('unittest')
@@ -349,8 +353,8 @@ class MainPage(webapp2.RequestHandler):
         self.response.out.write(template.render({ 'room_key': room_key }))
         logging.info('Room ' + room_key + ' is full')
         return
-
-    room_link = 'https://apprtc.appspot.com/?r=' + room_key
+    
+    room_link = base_url + '/?r=' + room_key
     room_link = append_url_arguments(self.request, room_link)
     token = create_channel(room, user, token_timeout)
     pc_config = make_pc_config(stun_server, turn_server, ts_pwd)
