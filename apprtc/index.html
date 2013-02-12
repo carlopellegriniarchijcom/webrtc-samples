@@ -212,6 +212,14 @@
 
   function doCall() {
     var constraints = {{ offer_constraints | safe }};
+    // temporary measure to remove Moz* constraints in Chrome
+    if (webrtcDetectedBrowser === "chrome") {
+      for (prop in constraints.mandatory) {
+        if (prop.indexOf("Moz") != -1) {
+          delete constraints.mandatory[prop];
+        }
+       }
+     }   
     constraints = mergeConstraints(constraints, sdpConstraints);
     console.log("Sending offer to peer, with constraints: \n" +
                 "  \"" + JSON.stringify(constraints) + "\".")
